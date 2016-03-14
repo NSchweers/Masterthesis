@@ -1,0 +1,142 @@
+% Created 2016-03-11 Fri 13:39
+\documentclass[11pt]{article}
+%\documentclass[11pt]{scrartcl}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{marvosym}
+\usepackage{wasysym}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\tolerance=1000
+\usepackage{color}
+\usepackage{listings}
+\usepackage{comment}
+\usepackage{todonotes}
+\usepackage{listings}
+\author{Nathanael Schweers}
+\date{\today}
+\title{Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp}
+% \hypersetup{
+%   pdfkeywords={},
+%   pdfsubject={},
+%   pdfcreator={Emacs 25.0.91.1 (Org mode 8.2.10)}}
+
+\newcommand{\el}{Emacs Lisp}
+\newcommand{\cl}{Common Lisp}
+\newcommand{\sym}[1]{\texttt{#1}}
+\newcommand{\fun}[1]{\sym{#1}}
+
+\begin{document}
+
+\lstset{language=Lisp}
+
+\maketitle
+\tableofcontents
+
+\begin{comment}
+  \begin{abstract}
+    In this thesis an extensible reader for \el{} is discussed.  This reader has
+    also been implemented to the point of basic usability, yet is not yet
+    complete.  Also, integration with Emacs’ navigation commands is not optimal.
+    This is due to the fact, that Emacs tries to find balanced parenthesis on
+    several occasions, as it assumes these are the only chars which can enclose
+    an sexp.
+  \end{abstract}
+\end{comment}
+
+
+\begin{abstract}
+  This thesis discusses the design and implementation of a reader for extensible
+  syntaxes, in Emacs Lisp.  In Lisp parlance, a reader is a part of the
+  interpreter/compiler, which converts the characters in the source code to data
+  structures.  In an extensible reader, new syntactic constructs may be
+  defined.  These new constructs take effect, when specific characters are
+  encountered in the source code, and may interact with the existing reader to
+  create arbitrary data structures which are later either interpreted or
+  compiled by the Lisp environment.
+
+  Some other languages feature such capabilities, of which \cl{} is most widely
+  known.  Some Scheme implementations also provide these or similar
+  possibilities, yet this is not part of the standard. \todo{Is this really so?
+    Provide a reference.}
+
+  In \cl{} the possibility to interact with the reader is called a read macro or
+  reader macro, and this term will also be used throughout this thesis.
+
+  \el{} does not provide reader macros.  As of the upcoming version 25.1 the
+  reader is implemented in C and does not provide any hooks into it, apart from
+  the usual advice system, which all \el{} functions provide.
+
+  The reader discussed in this thesis is written in \el{} and replaces the
+  built-in reader on a per-buffer basis.  To explain how this can be achieved is
+  the goal of this thesis. 
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+In this thesis, the author wishes to first convey what is meant by an extensible
+syntax, and why they might be relevant.  Also, depending on the background of
+the reader of this text, one might confuse such syntactic extensions with Domain
+Specific Languages—or DSLs for short.
+
+While there is some overlap between the two, DSLs are often not embedded, but
+instead come with a separate compiler and/or interpreter.  An extensible
+syntax, as it is presented here, allows to change the syntax on-the-fly,
+possibly without altering any present synaxes, thus allowing new syntactic
+constructs in an existing programming language. 
+
+\subsection{Reader, Compiler, Interpreter}
+\label{subsec:reader-compiler-interpreter}
+
+In this section, an overview over the reader, compiler and interpreter is given,
+as it is relevant to the central point of the thesis.
+
+\subsubsection{What does a reader do?}
+\label{subsubsec:what-reader-does}
+
+In a sense, every programming language has a reader.  Every language
+implementation must provide some means of converting characters in source code
+into data structures which are more meaningful to the later stages of
+interpretation or compilation.
+
+The difference in Lisp dialects is, that the reader is available to the
+programmer both at runtime and compile time (if there is a compile phase).
+
+This means, that an application may store data structures by printing them (for
+instance to a file) and later reading them back.  If one had a list, containing
+the symbol \sym{foo}, the number 3, the symbol \sym{bar} and the string ``4'',
+printing might result in this: \footnote{The exact form depends on the dialect.
+  If not otherwise stated, \el{} is assumed.  \cl{} is also used extensively.}
+
+\begin{lstlisting}
+(foo 3 bar "4")
+\end{lstlisting}
+
+This ``code'' may later be read back with a call to \fun{read}, to retrieve a
+data structure, which has the same shape as the original.  Note that this is not
+syntax for code, yet merely for data.  This is an idea which pervades Lisp, as
+code is data, and data may be code.
+
+If the code which was read in this example were to be evaluated (by calling
+\fun{eval} on the result of the call to \fun{read}), \sym{foo} would be expected
+to name a function, and \sym{bar} would be evaluated.  The function named by
+\sym{foo}, if any, would then be called with the argument 3, whatever \sym{bar}
+evaluated to, and the string ``4''.
+
+The strict distinction between reading code, and evaluating code is what makes
+reader macros possible.  It is also the reason for the parenthesis in typical
+lisp code.  This is because the list (denoted by parenthesis) is the structure
+in which code is held.  This is true for assignments \texttt{(setf var val)},
+function calls ...
+
+
+\end{document}
