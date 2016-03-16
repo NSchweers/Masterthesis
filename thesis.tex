@@ -1,6 +1,5 @@
-% Created 2016-03-11 Fri 13:39
-\documentclass[11pt]{article}
-%\documentclass[11pt]{scrartcl}
+% Created 2016-03-16 Wed 18:29
+\documentclass[a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{fixltx2e}
@@ -17,126 +16,351 @@
 \usepackage{amssymb}
 \usepackage[hidelinks]{hyperref}
 \tolerance=1000
-\usepackage{color}
-\usepackage{listings}
-\usepackage{comment}
+\usepackage{minted}
 \usepackage{todonotes}
-\usepackage{listings}
 \author{Nathanael Schweers}
 \date{\today}
 \title{Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp}
-% \hypersetup{
-%   pdfkeywords={},
-%   pdfsubject={},
-%   pdfcreator={Emacs 25.0.91.1 (Org mode 8.2.10)}}
-
-\newcommand{\el}{Emacs Lisp}
-\newcommand{\cl}{Common Lisp}
-\newcommand{\sym}[1]{\texttt{#1}}
-\newcommand{\fun}[1]{\sym{#1}}
-
+\hypersetup{
+ pdfauthor={Nathanael Schweers},
+ pdftitle={Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 25.0.92.1 (Org mode 8.3.4)}, 
+ pdflang={English}}
 \begin{document}
-
-\lstset{language=Lisp}
 
 \maketitle
 \tableofcontents
 
-\begin{comment}
-  \begin{abstract}
-    In this thesis an extensible reader for \el{} is discussed.  This reader has
-    also been implemented to the point of basic usability, yet is not yet
-    complete.  Also, integration with Emacs’ navigation commands is not optimal.
-    This is due to the fact, that Emacs tries to find balanced parenthesis on
-    several occasions, as it assumes these are the only chars which can enclose
-    an sexp.
-  \end{abstract}
-\end{comment}
-
-
 \begin{abstract}
-  This thesis discusses the design and implementation of a reader for extensible
-  syntaxes, in Emacs Lisp.  In Lisp parlance, a reader is a part of the
-  interpreter/compiler, which converts the characters in the source code to data
-  structures.  In an extensible reader, new syntactic constructs may be
-  defined.  These new constructs take effect, when specific characters are
-  encountered in the source code, and may interact with the existing reader to
-  create arbitrary data structures which are later either interpreted or
-  compiled by the Lisp environment.
+This thesis discusses the design and implementation of a proof of concept for
+an Emacs Lisp compatible reader for extensible syntaxes, in Emacs Lisp.  In Lisp
+parlance, the reader is the part of the interpreter/compiler, which converts
+the characters in the source code to data structures, which are then further
+processed.  In an extensible reader, new syntactic constructs may be defined.
+These new constructs take effect when specific characters are encountered in
+the source code, and may interact with the existing reader to create arbitrary
+data structures which are later either interpreted or compiled by the Lisp
+environment.
 
-  Some other languages feature such capabilities, of which \cl{} is most widely
-  known.  Some Scheme implementations also provide these or similar
-  possibilities, yet this is not part of the standard. \todo{Is this really so?
-    Provide a reference.}
+Some other languages feature such capabilities, of which Common Lisp is most
+widely known.  Some Scheme implementations also provide these or similar
+possibilities, yet this is not part of the standard.  SRFI-10 provides a
+specific character sequence with which all read macros must start.
+\todo{Provide a reference to SRFI-10 (see References tree)}
 
-  In \cl{} the possibility to interact with the reader is called a read macro or
-  reader macro, and this term will also be used throughout this thesis.
+In Common Lisp the possibility to interact with the reader is called a read macro or
+reader macro, and this term will also be used throughout this thesis.
 
-  \el{} does not provide reader macros.  As of the upcoming version 25.1 the
-  reader is implemented in C and does not provide any hooks into it, apart from
-  the usual advice system, which all \el{} functions provide.
+Emacs Lisp does not provide reader macros.  As of the upcoming version 25.1 the
+reader is implemented in C and does not provide any hooks into it, apart from
+the usual advice system, which all Emacs Lisp functions provide.
 
-  The reader discussed in this thesis is written in \el{} and replaces the
-  built-in reader on a per-buffer basis.  To explain how this can be achieved is
-  the goal of this thesis. 
+The code underlying this thesis provides a means to replace the reader built
+into Emacs.  The main point of this thesis is to show that the flexible nature
+of a Lisp environment may be used to replace even such a crucial part of the
+system as the reader at runtime, without affecting unrelated parts, or making
+the original part unavailable.
 \end{abstract}
 
-\section{Introduction}
-\label{sec:intro}
-In this thesis, the author wishes to first convey what is meant by an extensible
-syntax, and why they might be relevant.  Also, depending on the background of
-the reader of this text, one might confuse such syntactic extensions with Domain
-Specific Languages—or DSLs for short.
+\section{Ideas}
+\label{sec:orgheadline6}
+\subsection{Basics: What does a reader do?}
+\label{sec:orgheadline3}
+\subsubsection{Read simple syntax (lists, symbols, strings, etc) (mention atoms?)}
+\label{sec:orgheadline1}
+\subsubsection{Read more complex structures (quote, function)}
+\label{sec:orgheadline2}
+\subsection{How do read macros work?}
+\label{sec:orgheadline4}
+\subsection{How do read macros look?}
+\label{sec:orgheadline5}
 
-While there is some overlap between the two, DSLs are often not embedded, but
-instead come with a separate compiler and/or interpreter.  An extensible
+\section{Introduction}
+\label{sec:orgheadline7}
+In this thesis, the author wishes to first convey how Lisps syntax is different
+from other languages and why this is relevant to the discussion of extending the
+syntax.  Secondly what is meant by an extensible syntax or read macro, and why
+they might be relevant.  Also, depending on the background of the reader of this
+text, one might confuse such syntactic extensions with Domain Specific
+Languages—or DSLs for short.
+
+While there is some overlap between the two, DSLs are not necessarily embedded,
+but instead may come with a separate compiler and/or interpreter.  An extensible
 syntax, as it is presented here, allows to change the syntax on-the-fly,
-possibly without altering any present synaxes, thus allowing new syntactic
-constructs in an existing programming language. 
+possibly without altering any present syntactic constructs, thus allowing new
+constructs in an existing programming language.
+
+\section{Motivation}
+\label{sec:orgheadline8}
+Users of other Lisp dialects, Common Lisp comes to mind, for a long time have
+enjoyed the possibility to extend the syntax they use to write programs.  This
+possibility provides a huge benefit in the course of evolving a language.
+Macros---which are expanded at compile-time---provide a very powerful
+mechanism.  These allow to control the order of evaluation of forms within the
+macro, as well as the opportunity to transform them, yet sometimes even this
+kind of power is not quite enough.
+
+A very simple case, is the addition of syntax for data structures.  Most modern
+programming languages provide some syntax to enter hash tables.  Take for
+instance python, where the keys and values may be specified between curly
+braces: 
+
+\begin{minted}[]{python}
+{"foo": "bar", "five": 5}
+\end{minted}
+
+When entered into a python interpreter, this expression returns a hash table (or
+Dictionary in Python terminology).
+
+Clojure, a rather recent addition to the Lisp family of languages also features
+a similar syntax: 
+
+\begin{minted}[]{clojure}
+{"foo" "bar" "five" 5}
+\end{minted}
+
+This also returns a mapping from keys to values.
+
+Unfortunately, neither Common Lisp nor Emacs Lisp feature such (concise) syntax\footnote{Emacs Lisp has read (and even print) syntax for hash tables, yet is is rather
+ugly.  The same table looks like this: \#s(hash-table size 65 test eql
+rehash-size 1.5 rehash-threshold 0.8 data ("foo" "bar" "five" 5))}.
+Common Lisp users may create such a syntax themselves, yet Emacs Lisp users never had
+this possibility.
+
+One shortcut which is possible, is to simply define a function to do so;
+consider the function \texttt{ht} from the source code of this thesis, ported
+to Common Lisp:
+
+\begin{minted}[]{common-lisp}
+(defun ht (&rest args)
+  "Create and return a hashtable.
+
+Keys and values are given alternating in args."
+  (let ((h (make-hash-table)))
+    (loop for (key value) on args by #'cddr
+       do (if (and key value)
+              (setf (gethash key h) value)
+              (error "Odd number of arguments passed")))
+    h))
+\end{minted}
+
+This may be now used as:
+
+\begin{minted}[]{common-lisp}
+(ht "foo" "bar" "five" 5)
+\end{minted}
+
+instead of the more cumbersome
+
+\begin{minted}[]{common-lisp}
+(let ((h (make-hash-table)))
+  (prog1 h
+    (setf (gethash "foo" h) "bar")
+    (setf (gethash "five" h) 5)))
+\end{minted}
+
+To further shorten and clarify the creation of hash tables, Common Lisp users may
+use a read macro (assuming \texttt{ht} has been defined as above)\footnote{The
+details of this code are not of particular importance, merely that it is
+possible, and quite short.}:
+
+\begin{minted}[]{common-lisp}
+(set-macro-character #\} (get-macro-character #\)))
+
+(set-macro-character
+ #\{
+ (lambda (stream char)
+   (declare (ignore char))
+   (apply #'ht (read-delimited-list #\} stream t))))
+\end{minted}
+
+Now the Common Lisp reader reads "\{\ldots{}\}" constructs in a similar fashion as the
+Clojure reader does.
+
+Given the code from this thesis, this code may be used in Emacs Lisp to produce
+the same effect:
+
+\begin{minted}[]{common-lisp}
+(defun ht (&rest args)
+  "Create and return a hashtable.
+
+Keys and values are given alternating in args."
+  (let ((h (make-hash-table)))
+    (cl-loop for (key value) on args by #'cddr
+             do (if (and key value) (puthash key value h)
+                  (error "Odd number of arguments passed")))
+    h))
+
+(el-reader/set-macro-character ?\} (car (el-reader/get-macro-character ?\))))
+
+(el-reader/set-macro-character
+ ?\{
+ (lambda (stream char)
+   (apply #'ht (el-reader/read-delimited-list ?\} stream t))))
+\end{minted}
+
+Note the similarity of the API.  The prefixes have been put in place, as
+Emacs Lisp provides no packaging facilities.\footnote{Should Emacs change the internal
+representation of symbols, packaging may be worthwhile, given this reader.}
+
+A more sophisticated use case might be to provide read syntax for regular
+expressions---or regexps for short.  In Emacs Lisp regexps are notoriously ugly to
+enter and read, because they are opaque strings, which are passed to a function,
+which parses it at runtime.  This means that many constructs must be escaped
+multiple times, which makes the strings difficult to read and write.  Here again
+Clojure shows a nice way to handle the issue: by providing syntax for them.  In
+Clojure, a regexp is entered by prefixing a double quoted string with a \#
+character.
+
+While Clojure provides more syntax than Common Lisp and Emacs Lisp do, it provides no
+way for users to add their own shortcuts.
+
+\section{Reader basics}
+\label{sec:orgheadline17}
+See also: \hyperref[sec:orgheadline8]{Motivation}
+\subsection{Properties of Lisp Syntax}
+\label{sec:orgheadline9}
+The idea behind the syntax of Lisp is very different than in most other
+programming languages.  While most languages provide constructs for assignment,
+looping, function definition, etc, Lisp merely provides syntax for data
+structures.  This idea has been reused in data description languages such as XML
+and JSON, among others.  An expression in source form, which describes a Lisp
+object is also called a symbolic expression, or sexp for short.  The term form
+is also used on occasion.
+
+So far, no evaluation rules have been discussed, and rightly so.  The evaluation
+of code is not something the reader takes part in.  This is left to the
+interpreter or the compiler.
+
+\subsection{Intermezzo: syntax at runtime}
+\label{sec:orgheadline10}
+While some programming environments allow the user to load code at runtime, Lisp
+also allows to read and compile code at runtime.  The former is exposed by a
+function called \texttt{read}.  This function is given at least one argument:
+something which may be used to retrieve a character, and to put back at least
+one character which has been read.  This function attempts to read one Lisp
+object from the character stream, and returns said object if successful.
+
+This aspect may be compared to an XML parser, which also merely describes data.
+One difference is that a Lisp reader can be more flexible, as this thesis shows.
+A further difference is that standard Lisp syntax\footnote{Standard syntax refers to
+the set of rules present when no modification has taken place since a fresh
+start of the environment.} is shorter when a lot of markup is needed.
+I.e. writing programs in XML tends to be rather verbose, as such languages as ant
+\todo{Place some ref here.} show.  Writing a document in symbolic expressions
+would probably be rather cumbersome, as either lots of strings must be used, or
+elaborate rules for the treatment of special chars as apostrophes must be devised.
+
+\subsection{Important Lisp Data Types}
+\label{sec:orgheadline13}
+A few Lisp data types are of particular importance, both because they are
+relatively rare in other languages, but also because they are very widespread in
+Lisp code, i.e. the reader often creates them.
+
+Every Lisp dialect the author is aware of provides at least the following:
+
+\subsubsection{Symbols}
+\label{sec:orgheadline11}
+The symbol is a type, which represents a name, often together with places for
+values and/or functions.  The latter depend on the Lisp dialect.  An important
+property of symbols is that fast lookup is supported, and that symbols are
+interned.  This means that each symbol which is read, which has the same name,
+returns the same Lisp object.\footnote{This is, in effect, a singleton.}
+
+In Emacs Lisp, which is the Lisp under consideration for this thesis, a symbol has
+the following attributes:
+
+\begin{description}
+\item[{Name}] A (typically hashed) name for the symbol.  This may be retrieved as a
+string at any time.
+\item[{Value}] This is the value of the symbol.  It may be retrieved by a call to
+\texttt{symbol-value} or by simply appearing in a program (macros or
+special forms may treat symbols differently).
+\item[{Function}] This cell is looked up if the symbol is the first element of a
+list which is evaluated (more on this later).  Alternatively, a call to
+\texttt{symbol-function} returns the function to which it points (if
+any). \todo{place a reference}
+\item[{Property List}] A symbol may also have a Property List, or plist for short,
+which is a mapping from a key (mostly a symbol) to a value.  This is
+intended as a mechanism to store arbitrary metadata in a symbol.
+\end{description}
+
+\subsubsection{List}
+\label{sec:orgheadline12}
+In Lisp parlance, when a list is mentioned, it is almost always a singly linked
+list.  While by far not the only compound data structure\footnote{Strictly speaking,
+lists by themselves to not exist: there are only cons-cells, yet this nuance is
+not very important for the current discussion.}, it is a very important one.
+
+Not only is there syntax for lists---in the form of parentheses---together with
+the symbol, the list is used as the prime representation for code.  The
+following section hat some examples, as it discusses the result of calling the
+reader.
 
 \subsection{Reader, Compiler, Interpreter}
-\label{subsec:reader-compiler-interpreter}
-
+\label{sec:orgheadline16}
 In this section, an overview over the reader, compiler and interpreter is given,
 as it is relevant to the central point of the thesis.
 
 \subsubsection{What does a reader do?}
-\label{subsubsec:what-reader-does}
-
+\label{sec:orgheadline15}
 In a sense, every programming language has a reader.  Every language
 implementation must provide some means of converting characters in source code
 into data structures which are more meaningful to the later stages of
 interpretation or compilation.
 
-The difference in Lisp dialects is, that the reader is available to the
-programmer both at runtime and compile time (if there is a compile phase).
+The difference in Lisp is that the reader is available to the programmer both at
+runtime and compile time (if there is a compile phase).
 
 This means, that an application may store data structures by printing them (for
 instance to a file) and later reading them back.  If one had a list, containing
-the symbol \sym{foo}, the number 3, the symbol \sym{bar} and the string ``4'',
-printing might result in this: \footnote{The exact form depends on the dialect.
-  If not otherwise stated, \el{} is assumed.  \cl{} is also used extensively.}
+the symbol \texttt{foo}, the number 3, the symbol \texttt{bar} and the
+string ``4'', printing might result in this: \footnote{The exact form depends on the
+dialect.  If not otherwise stated, Emacs Lisp is assumed.  Common Lisp is also used
+extensively.}
 
-\begin{lstlisting}
+\begin{minted}[]{common-lisp}
 (foo 3 bar "4")
-\end{lstlisting}
+\end{minted}
 
-This ``code'' may later be read back with a call to \fun{read}, to retrieve a
-data structure, which has the same shape as the original.  Note that this is not
-syntax for code, yet merely for data.  This is an idea which pervades Lisp, as
-code is data, and data may be code.
+This may later be read back with a call to \texttt{read}, to retrieve a data
+structure, which has the same shape as the original.  Note that this is not
+syntax for code in the sense of execution, yet merely for data.  This is an idea
+which pervades Lisp, as code is data, and data may be code.
 
 If the code which was read in this example were to be evaluated (by calling
-\fun{eval} on the result of the call to \fun{read}), \sym{foo} would be expected
-to name a function, and \sym{bar} would be evaluated.  The function named by
-\sym{foo}, if any, would then be called with the argument 3, whatever \sym{bar}
-evaluated to, and the string ``4''.
+\texttt{eval} on the result of the call to \texttt{read}), \texttt{foo}
+would be expected to name a function, and \texttt{bar} would be evaluated.
+The function named by \texttt{foo}, if any, would then be called with the
+argument 3, whatever \texttt{bar} evaluated to, and the string ``4''.
 
 The strict distinction between reading code, and evaluating code is what makes
 reader macros possible.  It is also the reason for the parenthesis in typical
 lisp code.  This is because the list (denoted by parenthesis) is the structure
-in which code is held.  This is true for assignments \texttt{(setf var val)},
-function calls ...
+in which code is held.  This is true for assignments, function calls, function
+definitions etc.  Examples are given below.
 
+\begin{enumerate}
+\item Assignment
+\label{sec:orgheadline14}
+An assignment is either a macro (which expands to code), or a special form,
+i.e. a primitive which the implementation must provide.  Here a special form was
+chosen.  The value of the expression marked as \texttt{value} will be assigned
+to the place noted by the symbol \texttt{variablename}.  In most cases, the
+variable name must be quoted, i.e. be preserved as a symbol, instead of being
+evaluated.
 
+\begin{minted}[]{common-lisp}
+(set 'variablename value)
+\end{minted}
+\end{enumerate}
+
+\section{References}
+\label{sec:orgheadline18}
+\begin{description}
+\item[{srfi-10}] \url{http://srfi.schemers.org/srfi-10/srfi-10.html}
+\item[{dynamic scope misnomer}] \url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html}
+\end{description}
 \end{document}
