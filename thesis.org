@@ -7,6 +7,7 @@
 #+MACRO: cl Common Lisp
 #+MACRO: sym =$1=
 #+MACRO: fun =$1=
+#+MACRO: elr el-reader
 
 #+BEGIN_abstract
   This thesis discusses the design and implementation of a proof of concept for
@@ -189,7 +190,142 @@ While Clojure provides more syntax than {{{cl}}} and {{{el}}} do, it provides no
 way for users to add their own shortcuts.
 
 * Reader basics
-See also: [[#Motivation][Motivation]]
+# See also: [[#Motivation][Motivation]]  <-- This is an internal link.
+Before discussing what the reader is and what it does, it is important to first
+introduce a few important data types.
+** Important Lisp Data Types
+# Before discussing what the reader does, it is important to discuss a few data
+# types which are provided by a lisp.
+
+A few Lisp data types are of particular importance, both because they are
+relatively rare in other languages, but also because they are very widespread in
+Lisp code, i.e. the reader often creates them.
+
+Every Lisp dialect the author is aware of provides at least the following:
+
+*** Symbols
+The symbol is a type, which represents a name, often together with places for
+values and/or functions.  The latter depend on the Lisp dialect.  An important
+property of symbols is that fast lookup is supported, and that symbols are
+interned.  This means that each symbol which is read, which has the same name,
+returns the same Lisp object.[fn:: This is, in effect, a singleton.]
+
+In {{{el}}}, which is the Lisp under consideration for this thesis, a symbol has
+the following attributes:
+
+- Name :: A (typically hashed) name for the symbol.  This may be retrieved as a
+     string at any time.
+- Value :: This is the value of the symbol.  It may be retrieved by a call to
+     {{{fun(symbol-value)}}} or by simply appearing in a program (macros or
+     special forms may treat symbols differently).
+- Function :: This cell is looked up if the symbol is the first element of a
+     list which is evaluated (more on this later).  Alternatively, a call to
+     {{{fun(symbol-function)}}} returns the function to which it points (if
+     any). \todo{place a reference}
+- Property List :: A symbol may also have a Property List, or plist for short,
+     which is a mapping from a key (mostly a symbol) to a value.  This is
+     intended as a mechanism to store arbitrary metadata in a symbol.
+
+*** List
+In Lisp parlance, when a list is mentioned, it is almost always a singly linked
+list.  While by far not the only compound data structure[fn:: Strictly speaking,
+lists by themselves to not exist: there are only cons-cells, yet this nuance is
+not very important for the current discussion.], it is a very important one.
+
+Not only is there syntax for lists---in the form of parentheses---together with
+the symbol, the list is used as the prime representation for code.  The
+following section hat some examples, as it discusses the result of calling the
+reader.
+** Lisp basics
+This section is about a few basics of Lisp, not so much the reader.  Here it is
+discussed how nested lists can represent such actions as function calls,
+assignment and function definitions, as Lisp does not have any syntax for those.
+**** Function call
+In Lisp a function call happens when the evaluator comes across a list form.  In
+such a case the first element is taken to be a function and the other elements
+are its arguments.  Here is the canonical hello world program for {{{el}}}:
+
+#+BEGIN_SRC emacs-lisp
+  (print "Hello, world")
+#+END_SRC
+
+Here we have a list of two elements.  The first element happens to be a symbol,
+which has a function associated with it.  The second element (a string in this
+case) is evaluated (nothing special happens here, as strings evaluate to
+themselves, contrary to lists) and passed as the sole argument to the function
+named by the symbol print.
+
+**** Assignment
+An assignment is either a special form, i.e. a primitive which the
+implementation must provide, or a macro (which expands to other code, eventually
+leading to a special form).  Here the low level special form was chosen.  
+To assign the value 5 to the ``variable'' {{{sym(x)}}} with a such a low level
+special form, we could write the following:
+
+#+BEGIN_SRC emacs-lisp
+  (set (quote x) 5)
+#+END_SRC
+
+The {{{fun(quote)}}} form around {{{sym(x)}}} tells the evaluator to /not/
+evaluate {{{sym(x)}}}, but to pass it on as the symbol itself.  Note that the
+reader would have created the symbol {{{sym(x)}}}, and only the evaluator can
+care about any meaning for {{{sym(x)}}}.  Many language implementations throw
+symbols away at runtime.  This is also possible in Lisp, as the compiler can
+remove symbols and their lookups in many situations.
+
+Note that although {{{fun(set)}}} is a special form, it too is invoked when it
+is the first element in a list.  Like macros, but unlike functions, special
+forms may control how to evaluate their arguments.
+
+**** Function definition
+Unsurprisingly, a function is defined by a list form, with a special symbol as
+its first element.  In {{{el}}} this symbol is {{{fun(defun)}}}.
+
+#+BEGIN_SRC emacs-lisp
+  (defun say-hello (text)
+    (print text))
+#+END_SRC
+
+Note that the third element, although it is a list, is neither evaluated, nor
+must it be quoted.  This is because {{{fun(defun)}}} is a macro, and macros may
+control how to evaluate their arguments.
+
+** What does the reader do?
+In a sense, every programming language has a reader.  Every language
+implementation must provide some means of converting characters in source code
+into data structures which are more meaningful to the later stages of
+interpretation or compilation.
+
+The difference in Lisp is that the reader is available to the programmer both at
+runtime and compile time (if there is a compile phase).
+
+This means, that an application may store data structures by printing them (for
+instance to a file) and later reading them back.  If one had a list, containing
+the symbol {{{sym(foo)}}}, the number 3, the symbol {{{sym(bar)}}} and the
+string "4", printing might result in this: [fn:: The exact form depends on the
+dialect.  If not otherwise stated, {{{el}}} is assumed.  {{{cl}}} is also used
+extensively.]
+
+#+BEGIN_SRC emacs-lisp
+  (foo 3 bar "4")
+#+END_SRC
+
+This may later be read back with a call to {{{fun(read)}}}, to retrieve a data
+structure, which has the same shape as the original.  Note that this is not
+syntax for code in the sense of execution, yet merely for data.  This is an idea
+which pervades Lisp, as code is data, and data may be code.
+
+If the code which was read in this example were to be evaluated (by calling
+{{{fun(eval)}}} on the result of the call to {{{fun(read)}}}), {{{sym(foo)}}}
+would be expected to name a function, and {{{sym(bar)}}} would be evaluated as a
+variable.  The function named by {{{sym(foo)}}}, if any, would then be called
+with the argument 3, whatever {{{sym(bar)}}} evaluated to, and the string "4".
+
+The strict distinction between /reading/, and /evaluating/ code is what makes
+read macros possible.  It is also the reason for the parenthesis in typical
+lisp code.  This is because the list (denoted by parenthesis) is the structure
+in which code is held.  This is true for assignments, function calls, function
+definitions etc.  Examples are given below.
 ** Properties of Lisp Syntax
 The idea behind the syntax of Lisp is very different than in most other
 programming languages.  While most languages provide constructs for assignment,
@@ -290,102 +426,134 @@ runtime, as a regular function), it enables macros, which run at compile-time to
 transform a tree into a different tree (which in turn may be compiled), and read
 macros, the implementation of which is the topic of this thesis.
 
-** Important Lisp Data Types
-# Before discussing what the reader does, it is important to discuss a few data
-# types which are provided by a lisp.
-
-A few Lisp data types are of particular importance, both because they are
-relatively rare in other languages, but also because they are very widespread in
-Lisp code, i.e. the reader often creates them.
-
-Every Lisp dialect the author is aware of provides at least the following:
-
-*** Symbols
-The symbol is a type, which represents a name, often together with places for
-values and/or functions.  The latter depend on the Lisp dialect.  An important
-property of symbols is that fast lookup is supported, and that symbols are
-interned.  This means that each symbol which is read, which has the same name,
-returns the same Lisp object.[fn:: This is, in effect, a singleton.]
-
-In {{{el}}}, which is the Lisp under consideration for this thesis, a symbol has
-the following attributes:
-
-- Name :: A (typically hashed) name for the symbol.  This may be retrieved as a
-     string at any time.
-- Value :: This is the value of the symbol.  It may be retrieved by a call to
-     {{{fun(symbol-value)}}} or by simply appearing in a program (macros or
-     special forms may treat symbols differently).
-- Function :: This cell is looked up if the symbol is the first element of a
-     list which is evaluated (more on this later).  Alternatively, a call to
-     {{{fun(symbol-function)}}} returns the function to which it points (if
-     any). \todo{place a reference}
-- Property List :: A symbol may also have a Property List, or plist for short,
-     which is a mapping from a key (mostly a symbol) to a value.  This is
-     intended as a mechanism to store arbitrary metadata in a symbol.
-
-*** List
-In Lisp parlance, when a list is mentioned, it is almost always a singly linked
-list.  While by far not the only compound data structure[fn:: Strictly speaking,
-lists by themselves to not exist: there are only cons-cells, yet this nuance is
-not very important for the current discussion.], it is a very important one.
-
-Not only is there syntax for lists---in the form of parentheses---together with
-the symbol, the list is used as the prime representation for code.  The
-following section hat some examples, as it discusses the result of calling the
-reader.
-
 ** Reader, Compiler, Interpreter
-In this section, an overview over the reader, compiler and interpreter is given,
-as it is relevant to the central point of the thesis.
+In this section, an overview over the reader, compiler and interpreter, together
+with their interactions is given, as it is relevant to the central point of the
+thesis.
 
-*** What does a reader do?
-In a sense, every programming language has a reader.  Every language
-implementation must provide some means of converting characters in source code
-into data structures which are more meaningful to the later stages of
-interpretation or compilation.
+* Why Emacs?
+The author chose to extend Emacs with an extensible reader, and not some other
+member of the Lisp family, such as Clojure for several reasons.  One reason is
+that the author has gained the most familiarity with {{{el}}} and {{{cl}}}.  The
+two are reasonably similar in a number of ways, especially with {{{el}}} growing
+a lot in recent years.  {{{el}}} used to have only dynamic scope, yet gained
+optional lexical scope in version 24.1,[fn:: See
+https://www.gnu.org/software/emacs/news/NEWS.24.1] giving {{{el}}} both lexical
+and dynamic scope, as with {{{cl}}}.  Also, in the next version of Emacs, which
+will probably become version 25.1,[fn:: See
+http://permalink.gmane.org/gmane.emacs.announce/59 for a source tarball.  It
+contains a file etc/NEWS which details changes] CLOS-style multiple dispatch
+generic functions have been added, which ease development for many scenarios and
+again are a step towards {{{cl}}}.
 
-The difference in Lisp is that the reader is available to the programmer both at
-runtime and compile time (if there is a compile phase).
+{{{el}}} is also quite similar to {{{cl}}} in many other rather minor respects.
+Both are a Lisp-2[fn:: Being a Lisp-2 means having separate namespaces for
+functions and variables.], both use {{{sym(defun)}}} to define functions and
+{{{sym(defmacro)}}} to define macros, both with a very similar and largely
+compatible grammar.  {{{el}}} also sports a built-in package called CL which
+tries to emulate many {{{cl}}} features, such as more features for default
+arguments, destructuring, and the {{{cl}}} {{{fun(loop)}}} macro.
 
-This means, that an application may store data structures by printing them (for
-instance to a file) and later reading them back.  If one had a list, containing
-the symbol {{{sym(foo)}}}, the number 3, the symbol {{{sym(bar)}}} and the
-string ``4'', printing might result in this: [fn:: The exact form depends on the
-dialect.  If not otherwise stated, {{{el}}} is assumed.  {{{cl}}} is also used
-extensively.]
+Emacs still has a long way to go before being as powerful as {{{cl}}}, and
+probably never will be, as multithreading, conditions and restarts, full CLOS
+support, packages and some minor issues like global symbol macros are still
+missing.
 
-#+BEGIN_SRC emacs-lisp
-  (foo 3 bar "4")
-#+END_SRC
+As Emacs also does not feature a built-in extensible reader, this thesis
+provided one to hopefully drive Emacs development forward some more.
 
-This may later be read back with a call to {{{fun(read)}}}, to retrieve a data
-structure, which has the same shape as the original.  Note that this is not
-syntax for code in the sense of execution, yet merely for data.  This is an idea
-which pervades Lisp, as code is data, and data may be code.
+* API overview
+The API of {{{elr}}} takes lots of inspiration from the corresponding API in
+{{{cl}}}, as the two languages are sufficiently similar, and {{{cl}}} has a very
+mature library.  Also, it may be expected that some {{{el}}} developers are
+familiar with {{{cl}}} read macros.  Those who are not may benefit from the
+similarity, as learning and reference material on {{{cl}}} read macros seems to
+be more widely available than for any other Lisp, probably due to its stable
+standard.  [fn:: Paul Grahams book ``On Lisp'' contains a chapter explaining
+both regular macros and read macros.  It is available for free at
+http://www.paulgraham.com/onlisp.html]
 
-If the code which was read in this example were to be evaluated (by calling
-{{{fun(eval)}}} on the result of the call to {{{fun(read)}}}), {{{sym(foo)}}}
-would be expected to name a function, and {{{sym(bar)}}} would be evaluated.
-The function named by {{{sym(foo)}}}, if any, would then be called with the
-argument 3, whatever {{{sym(bar)}}} evaluated to, and the string ``4''.
+** The readtable
+The only user visible data structure is the readtable.  In {{{cl}}} this type
+has non-enumerable types, while in {{{elr}}} it is defined in terms of
+{{{fun(defclass)}}}, hence is enumerable and even has public attributes.  Most
+users will need none of these.  They are mostly needed when creating a
+completely new readtable from scratch.  
 
-The strict distinction between reading code, and evaluating code is what makes
-reader macros possible.  It is also the reason for the parenthesis in typical
-lisp code.  This is because the list (denoted by parenthesis) is the structure
-in which code is held.  This is true for assignments, function calls, function
-definitions etc.  Examples are given below.
+The readtable provides the basis on which {{{elr}}} decides how to treat
+characters.  Characters have exactly one syntax type.
 
-**** Assignment
-An assignment is either a macro (which expands to code), or a special form,
-i.e. a primitive which the implementation must provide.  Here a special form was
-chosen.  The value of the expression marked as {{{sym(value)}}} will be assigned
-to the place noted by the symbol {{{sym(variablename)}}}.  In most cases, the
-variable name must be quoted, i.e. be preserved as a symbol, instead of being
-evaluated.
+*** Syntax types
+Here all syntax types are listed.  These are very similar to the syntax types in
+{{{cl}}}, yet differ in a few points, as the main goal was not to parse {{{cl}}}
+code, but to be compatible to {{{el}}}.
+**** Constituent
+Most characters are treated as ``constituent'' characters.  To be precise: if a
+character does not have a different syntax type, it is constituent.  Constituent
+characters may be part of a token.
 
-#+BEGIN_SRC emacs-lisp
-  (set 'variablename value)
-#+END_SRC
+Constituent characters also have traits, which will be discussed in the next
+section.
+**** Invalid
+If the reader encounters an invalid character, an error is raised.  This does
+not imply that no such char may be in the input stream.  A read macro may choose
+to skip such characters, or may use them in creative ways.  This is completely
+up to the user.  The default readtable does not specify any characters to have
+the invalid syntax type.
+**** Whitespace
+These are characters which serve no special meaning.  The name should be pretty
+explanatory. 
+**** Single escape
+In standard {{{el}}} a single escape char allows spaces and other characters
+which do not comprise a symbol by itself to be part of one.  The sequence "foo
+bar" would normally denote two tokens (from which two symbols will be created).
+Should the desired name of /one/ symbol be "foo bar", a backslash is needed
+(which is the sole default single escape char): "foo\ bar" would read as one
+token, not two.  This works in vanilla {{{el}}}, although the author has never
+seen this in the wild.
+
+In {{{cl}}} this is more important, as the reader up-cases all chars by default,
+which escaping also inhibits.  This aspect of {{{cl}}} was not incorporated into
+{{{elr}}}, as it is probably only present in {{{cl}}} for historic reasons.
+**** Multiple escape
+These chars are similar to single escape chars.  While a single escape only
+escapes the next char, a multiple escape char escapes all chars up to the next
+multiple escape char.  In {{{cl}}} the `|' character is used by default, in
+{{{elr}}} the functionality is present, yet no character has been assigned, as
+most users would not expect the pipe character to behave in such a way.
+**** Terminating macro character
+These characters are what make read macros so interesting.  Every macro
+character has an associated function, which is called with the character and the
+current stream as arguments.
+
+A function associated with a macro char may have no side effects apart from
+advancing the stream, as such a function may make no assumptions about the
+number of times an object is read.  Such a function may read one char at a time,
+put back one read char which it has just read, and call {{{fun(read)}}} on the
+(possibly advanced) stream.  
+
+The function which is associated with a macro character shall return the read
+object.
+
+Terminating macro characters also terminate any token which may have been read
+before encountering the macro character.  For example, `(' is a Terminating
+macro character, which reads a list.  When the reader encounters the string
+"foo(..." it reads the constituents `f' `o' and `o'.  When `('---which is a
+/terminating/ macro character---is encountered, it is put back into the stream,
+and "foo" is treated as a token.  In the next call to {{{fun(read)}}} (should
+there be any), the function associated with `(' will be called, which in turn is
+the result of the read call.
+**** Non-terminating macro character
+These characters are very similar to /terminating/ macro characters.  The only
+difference is how such a character is treated when constituents have been read.
+While reading a token, a terminating macro character is put back into the stream
+and the already read characters form a token.  When a /non/-terminating macro
+character is encountered, the character is treated as if it was a constituent
+and its function is /not/ called.  If no constituents have been read before, an
+non-terminating macro character is treated the same as a terminating macro
+character.  
+
+\todo{Change the hash to be terminating in the default readtable, as default elisp treats it as terminating!}
 
 * COMMENT Appendix
 #+ATTR_LATEX: :options linenos=true,fontsize=\footnotesize,firstline=37,firstnumber=37
