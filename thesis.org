@@ -553,8 +553,6 @@ and its function is /not/ called.  If no constituents have been read before, an
 non-terminating macro character is treated the same as a terminating macro
 character.  
 
-\todo{Change the hash to be terminating in the default readtable, as default elisp treats it as terminating!}
-
 * COMMENT Appendix
 #+ATTR_LATEX: :options linenos=true,fontsize=\footnotesize,firstline=37,firstnumber=37
 #+INCLUDE: "~/code/el-reader/el-reader.el" src emacs-lisp
