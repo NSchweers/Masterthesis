@@ -3,11 +3,16 @@
 #+LATEX_CLASS_OPTIONS: [a4paper]
 #+latex_header: \usepackage{todonotes}
 
-#+MACRO: el Emacs Lisp
-#+MACRO: cl Common Lisp
-#+MACRO: sym =$1=
-#+MACRO: fun =$1=
+#+MACRO: el \el{}
+#+MACRO: cl \cl{}
+#+MACRO: sym \sym{$1}
+#+MACRO: fun \fun{$1}
 #+MACRO: elr el-reader
+
+#+LATEX: \newcommand{\el}{Emacs Lisp}
+#+LATEX: \newcommand{\cl}{Common Lisp}
+#+LATEX: \newcommand{\sym}[1]{\texttt{#1}}
+#+LATEX: \newcommand{\fun}[1]{\texttt{#1}}
 
 #+BEGIN_abstract
   This thesis discusses the design and implementation of a proof of concept for
@@ -483,6 +488,13 @@ completely new readtable from scratch.
 The readtable provides the basis on which {{{elr}}} decides how to treat
 characters.  Characters have exactly one syntax type.
 
+Note that not all characters which denote the same value have the same syntax
+type and traits.  It is possible for a character (for instance when escaped) to
+be treated as a constituent with the alphabetic trait, although it would
+otherwise denote a macro character.  For instance: `(' is a macro character, but
+if read as ``\('', the open parenthesis will instead be treated as an alphabetic
+constituent.  Traits such as alphabetic will be treated in 
+
 *** Syntax types
 Here all syntax types are listed.  These are very similar to the syntax types in
 {{{cl}}}, yet differ in a few points, as the main goal was not to parse {{{cl}}}
@@ -553,6 +565,9 @@ and its function is /not/ called.  If no constituents have been read before, an
 non-terminating macro character is treated the same as a terminating macro
 character.  
 
+*** Traits
+Every character which is a constituent also has one or more traits, which
+provide further information on its use.
 * COMMENT Appendix
 #+ATTR_LATEX: :options linenos=true,fontsize=\footnotesize,firstline=37,firstnumber=37
 #+INCLUDE: "~/code/el-reader/el-reader.el" src emacs-lisp

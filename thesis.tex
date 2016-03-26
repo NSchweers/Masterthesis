@@ -1,0 +1,664 @@
+% Created 2016-03-18 Fri 14:40
+\documentclass[a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{marvosym}
+\usepackage{wasysym}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cite}
+\tolerance=1000
+\usepackage{minted}
+\usepackage{todonotes}
+%\usepackage{biblatex}
+\author{Nathanael Schweers}
+\date{\today}
+\title{Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp}
+% \hypersetup{
+%   pdfkeywords={},
+%   pdfsubject={},
+%   pdfcreator={Emacs 25.0.91.1 (Org mode 8.2.10)}}
+
+\newcommand{\el}{Emacs Lisp}
+\newcommand{\cl}{Common Lisp}
+\newcommand{\elr}{el-reader}
+\newcommand{\sym}[1]{\texttt{#1}}
+\newcommand{\fun}[1]{\texttt{#1}}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\begin{abstract}
+  This thesis discusses the design and implementation of a proof of concept for
+  an \el{} compatible reader for extensible syntaxes, in \el{}.  In Lisp
+  parlance, the reader is the part of the interpreter/compiler, which converts
+  the characters in the source code to data structures, which are then further
+  processed.  In an extensible reader, new syntactic constructs may be defined.
+  These new constructs take effect when specific characters are encountered in
+  the source code, and may interact with the existing reader to create arbitrary
+  data structures which are later either interpreted or compiled by the Lisp
+  environment.
+
+  Some other languages feature such capabilities, of which \cl{} is most widely
+  known.  Some Scheme implementations also provide these or similar
+  possibilities, yet this is not part of the standard.  SRFI-10 provides a
+  specific character sequence with which all read macros must
+  start. \cite{srfi-10}
+
+  In \cl{} the possibility to interact with the reader is called a read macro or
+  reader macro, and this term will also be used throughout this thesis.
+
+  \el{} does not provide reader macros.  As of the upcoming version 25.1 the
+  reader is implemented in C and does not provide any hooks into it, apart from
+  the usual advice system, which all \el{} functions provide.
+
+  The code underlying this thesis provides a means to replace the reader built
+  into Emacs.  The main point of this thesis is to show that the flexible nature
+  of a Lisp environment may be used to replace even such a crucial part of the
+  system as the reader at runtime, without affecting unrelated parts, or making
+  the original part unavailable.
+\end{abstract}
+
+\section{Ideas}
+\label{sec-1}
+\subsection{Basics: What does a reader do?}
+\label{sec-1-1}
+\subsubsection{Read simple syntax (lists, symbols, strings, etc) (mention atoms?)}
+\label{sec-1-1-1}
+\subsubsection{Read more complex structures (quote, function)}
+\label{sec-1-1-2}
+\subsection{How do read macros work?}
+\label{sec-1-2}
+\subsection{How do read macros look?}
+\label{sec-1-3}
+
+\section{Introduction}
+\label{sec:introduction}
+In this thesis, the author wishes to first convey how Lisps syntax is different
+from other languages and why this is relevant to the discussion of extending the
+syntax.  Secondly what is meant by an extensible syntax or read macro, and why
+they might be relevant.  Also, depending on the background of the reader of this
+text, one might confuse such syntactic extensions with Domain Specific
+Languages—or DSLs for short.
+
+While there is some overlap between the two, DSLs are not necessarily embedded,
+but instead may come with a separate compiler and/or interpreter.  An extensible
+syntax, as it is presented here, allows to change the syntax on-the-fly,
+possibly without altering any present syntactic constructs, thus allowing new
+constructs in an existing programming language.
+
+\section{Motivation}
+\label{sec:motivation}
+Users of other Lisp dialects, \cl{} comes to mind, for a long time have enjoyed
+the possibility to extend the syntax they use to write programs.  This
+possibility provides a huge benefit in the course of evolving a language.
+Macros---which are expanded at compile-time---provide a very powerful mechanism.
+These allow to control the order of evaluation of forms within the macro, as
+well as the opportunity to transform them, yet sometimes even this kind of power
+is not quite enough.
+
+A very simple case, is the addition of syntax for data structures.  Most modern
+programming languages provide some syntax to enter hash tables.  Take for
+instance python, where the keys and values may be specified between curly
+braces:
+
+\begin{minted}[]{python}
+{"foo": "bar", "five": 5}
+\end{minted}
+
+When entered into a python interpreter, this expression returns a hash table (or
+Dictionary in Python terminology).
+
+Clojure, a rather recent addition to the Lisp family of languages also features
+a similar syntax:
+
+\begin{minted}[]{clojure}
+{"foo" "bar" "five" 5}
+\end{minted}
+
+This also returns a mapping from keys to values.
+
+Unfortunately, neither \cl{} nor \el{} feature such (concise)
+syntax\footnote{has read (and even print) syntax for hash tables, yet is is
+  rather ugly.  The same table looks like this: \#s(hash-table size 65 test eql
+  rehash-size 1.5 rehash-threshold 0.8 data ("foo" "bar" "five" 5))}.  \cl{}
+users may create such a syntax themselves, yet \el{} users never had this
+possibility.
+
+One shortcut which is possible, is to simply define a function to do so;
+consider the function \fun{ht} from the source code of this thesis, ported to
+\cl{}:
+
+\begin{minted}[]{common-lisp}
+(defun ht (&rest args)
+  "Create and return a hashtable.
+
+Keys and values are given alternating in args."
+  (let ((h (make-hash-table)))
+    (loop for (key value) on args by #'cddr
+       do (if (and key value)
+              (setf (gethash key h) value)
+              (error "Odd number of arguments passed")))
+    h))
+\end{minted}
+
+This may be now used as:
+
+\begin{minted}[]{common-lisp}
+(ht "foo" "bar" "five" 5)
+\end{minted}
+
+instead of the more cumbersome
+
+\begin{minted}[]{common-lisp}
+(let ((h (make-hash-table)))
+  (prog1 h
+    (setf (gethash "foo" h) "bar")
+    (setf (gethash "five" h) 5)))
+\end{minted}
+
+To further shorten and clarify the creation of hash tables, \cl{} users may use
+a read macro (assuming \fun{ht} has been defined as above)\footnote{The details
+  of this code are not of particular importance, merely that it is possible, and
+  quite short.}:
+
+\begin{minted}[]{common-lisp}
+(set-macro-character #\} (get-macro-character #\)))
+
+(set-macro-character
+ #\{
+ (lambda (stream char)
+   (declare (ignore char))
+   (apply #'ht (read-delimited-list #\} stream t))))
+\end{minted}
+
+Now the \cl{} reader reads "\{\ldots{}\}" constructs in a similar fashion as the
+Clojure reader does.
+
+Given the code from this thesis, this code may be used in \el{} to produce the
+same effect:
+
+\begin{minted}[]{common-lisp}
+(defun ht (&rest args)
+  "Create and return a hashtable.
+
+Keys and values are given alternating in args."
+  (let ((h (make-hash-table)))
+    (cl-loop for (key value) on args by #'cddr
+             do (if (and key value) (puthash key value h)
+                  (error "Odd number of arguments passed")))
+    h))
+
+(el-reader/set-macro-character ?\} (car (el-reader/get-macro-character ?\))))
+
+(el-reader/set-macro-character
+ ?\{
+ (lambda (stream char)
+   (apply #'ht (el-reader/read-delimited-list ?\} stream t))))
+\end{minted}
+
+Note the similarity of the API.  The prefixes have been put in place, as \el{}
+provides no packaging facilities.\footnote{Should Emacs change the internal
+  representation of symbols, packaging may be worthwhile, given this reader.}
+
+A more sophisticated use case might be to provide read syntax for regular
+expressions---or regexps for short.  In \el{} regexps are notoriously ugly to
+enter and read, because they are opaque strings, which are passed to a function,
+which parses it at runtime.  This means that many constructs must be escaped
+multiple times, which makes the strings difficult to read and write.  Here again
+Clojure shows a nice way to handle the issue: by providing syntax for them.  In
+Clojure, a regexp is entered by prefixing a double quoted string with a \#
+character.
+
+While Clojure provides more syntax than \cl{} and \el{} do, it provides no way
+for users to add their own shortcuts.
+
+\section{Reader basics}
+\label{sec:reader-basics}
+
+Before discussing what the reader is and what it does, it is important to first
+introduce a few important data types.
+\subsection{Important Lisp Data Types}
+\label{subsec:important-types}
+
+A few Lisp data types are of particular importance, both because they are
+relatively rare in other languages, but also because they are very widespread in
+Lisp code, i.e. the reader often creates them.
+
+Every Lisp dialect the author is aware of provides at least the following:
+
+\subsubsection{Symbols}
+\label{subsubsec:symbols}
+
+The symbol is a type, which represents a name, often together with places for
+values and/or functions.  The latter depend on the Lisp dialect.  An important
+property of symbols is that fast lookup is supported, and that symbols are
+interned.  This means that each symbol which is read, which has the same name,
+returns the same Lisp object.\footnote{This is, in effect, a singleton.}
+
+In \el{}, which is the Lisp under consideration for this thesis, a symbol has
+the following attributes:
+
+\begin{description}
+\item[{Name}] A (typically hashed) name for the symbol.  This may be retrieved
+  as a string at any time.
+\item[{Value}] This is the value of the symbol.  It may be retrieved by a call
+  to \fun{symbol-value} or by simply appearing in a program (macros or special
+  forms may treat symbols differently).
+\item[{Function}] This cell is looked up if the symbol is the first element of a
+  list which is evaluated (more on this later).  Alternatively, a call to
+  \fun{symbol-function} returns the function to which it points (if any).
+\item[{Property List}] A symbol may also have a Property List, or plist for
+  short, which is a mapping from a key (mostly a symbol) to a value.  This is
+  intended as a mechanism to store arbitrary metadata in a symbol.
+\end{description}
+
+\subsubsection{List}
+\label{subsubsec:list}
+
+In Lisp parlance, when a list is mentioned, it is almost always a singly linked
+list.  While by far not the only compound data structure\footnote{Strictly
+  speaking, lists by themselves to not exist: there are only cons-cells, yet
+  this nuance is not very important for the current discussion.}, it is a very
+important one.
+
+Not only is there syntax for lists---in the form of parentheses---together with
+the symbol, the list is used as the prime representation for code.  The
+following section hat some examples, as it discusses the result of calling the
+reader.
+\subsection{Lisp basics}
+\label{subsec:lisp-basics}
+
+This section is about a few basics of Lisp, not so much the reader.  Here it is
+discussed how nested lists can represent such actions as function calls,
+assignment and function definitions, as Lisp does not have any syntax for those.
+\paragraph{Function call}
+\label{par:function-call}
+
+In Lisp a function call happens when the evaluator comes across a list form.  In
+such a case the first element is taken to be a function and the other elements
+are its arguments.  Here is the canonical hello world program for \el{}:
+
+\begin{minted}[]{common-lisp}
+(print "Hello, world")
+\end{minted}
+
+Here we have a list of two elements.  The first element happens to be a symbol,
+which has a function associated with it.  The second element (a string in this
+case) is evaluated (nothing special happens here, as strings evaluate to
+themselves, contrary to lists) and passed as the sole argument to the function
+named by the symbol print.
+
+\paragraph{Assignment}
+\label{par:assignment}
+
+An assignment is either a special form, i.e. a primitive which the
+implementation must provide, or a macro (which expands to other code, eventually
+leading to a special form).  Here the low level special form was chosen.  To
+assign the value 5 to the ``variable'' \sym{x} with a such a low level special
+form, we could write the following:
+
+\begin{minted}[]{common-lisp}
+(set (quote x) 5)
+\end{minted}
+
+The \fun{quote} form around \sym{x} tells the evaluator to \emph{not} evaluate
+\sym{x}, but to pass it on as the symbol itself.  Note that the reader would
+have created the symbol \sym{x}, and only the evaluator can care about any
+meaning for \sym{x}.  Many language implementations throw symbols away at
+runtime.  This is also possible in Lisp, as the compiler can remove symbols and
+their lookups in many situations.
+
+Note that although \fun{set} is a special form, it too is invoked when it is the
+first element in a list.  Like macros, but unlike functions, special forms may
+control how to evaluate their arguments.
+
+\paragraph{Function definition}
+\label{par:function-def}
+Unsurprisingly, a function is defined by a list form, with a special symbol as
+its first element.  In \el{} this symbol is \fun{defun}.
+
+\begin{minted}[]{common-lisp}
+(defun say-hello (text)
+  (print text))
+\end{minted}
+
+Note that the third element, although it is a list, is neither evaluated, nor
+must it be quoted.  This is because \fun{defun} is a macro, and macros may
+control how to evaluate their arguments.
+
+\subsection{What does the reader do?}
+\label{subsec:what-does-the-reader-do}
+In a sense, every programming language has a reader.  Every language
+implementation must provide some means of converting characters in source code
+into data structures which are more meaningful to the later stages of
+interpretation or compilation.
+
+The difference in Lisp is that the reader is available to the programmer both at
+runtime and compile time (if there is a compile phase).
+
+This means, that an application may store data structures by printing them (for
+instance to a file) and later reading them back.  If one had a list, containing
+the symbol \sym{foo}, the number 3, the symbol \sym{bar} and the string "4",
+printing might result in this: \footnote{The exact form depends on the dialect.
+  If not otherwise stated, is assumed.  is also used extensively.}
+
+\begin{minted}[]{common-lisp}
+(foo 3 bar "4")
+\end{minted}
+
+This may later be read back with a call to \fun{read}, to retrieve a data
+structure, which has the same shape as the original.  Note that this is not
+syntax for code in the sense of execution, yet merely for data.  This is an idea
+which pervades Lisp, as code is data, and data may be code.
+
+If the code which was read in this example were to be evaluated (by calling
+\fun{eval} on the result of the call to \fun{read}), \sym{foo} would be expected
+to name a function, and \sym{bar} would be evaluated as a variable.  The
+function named by \sym{foo}, if any, would then be called with the argument 3,
+whatever \sym{bar} evaluated to, and the string "4".
+
+The strict distinction between \emph{reading}, and \emph{evaluating} code is
+what makes read macros possible.  It is also the reason for the parenthesis in
+typical lisp code.  This is because the list (denoted by parenthesis) is the
+structure in which code is held.  This is true for assignments, function calls,
+function definitions etc.  Examples are given below.
+
+\subsection{Properties of Lisp Syntax}
+\label{subsec:properties-of-lisp-syntax}
+
+The idea behind the syntax of Lisp is very different than in most other
+programming languages.  While most languages provide constructs for assignment,
+looping, function definition, etc, Lisp merely provides syntax for data
+structures.  This idea has been reused in data description languages such as XML
+and JSON, among others.  An expression in source form, which describes a Lisp
+object is also called a symbolic expression, or sexp for short.  The term form
+is also used on occasion.
+
+So far, no evaluation rules have been discussed, and rightly so.  The evaluation
+of code is not something the reader takes part in.  This is left to the
+interpreter or the compiler.
+
+\subsection{Intermezzo: syntax at runtime}
+\label{subsec:intermezzo:syntax-at-runtime}
+
+While some programming environments allow the user to load code at runtime, Lisp
+also allows to read and compile code at runtime.  The former is exposed by a
+function called \fun{read}.  This function is given at least one argument:
+something which may be used to retrieve a character, and to put back at least
+one character which has been read.  This function attempts to read one Lisp
+object from the character stream, and returns said object if successful.
+
+This aspect may be compared to an XML parser, which also merely describes data.
+One difference is that a Lisp reader can be more flexible, as this thesis shows.
+A further difference is that standard Lisp syntax\footnote{Standard syntax
+  refers to the set of rules present when no modification has taken place since
+  a fresh start of the environment.} is shorter when a lot of markup is needed.
+I.e. writing programs in XML tends to be rather verbose, as such languages as
+ant show \cite{ant}.  Writing a document in symbolic expressions would probably
+be rather cumbersome, as either lots of strings must be used, or elaborate rules
+for the treatment of special chars as apostrophes must be devised.
+
+\subsection{Reader, Compiler, Interpreter}
+\label{subsec:reader-compiler-interpreter}
+
+In this section, an overview over the reader, compiler and interpreter, together
+with their interactions is given, as it is relevant to the central point of the
+thesis.
+
+\section{Why Emacs?}
+\label{sec:why-emacs}
+
+The author chose to extend Emacs with an extensible reader, and not some other
+member of the Lisp family, such as Clojure for several reasons.  One reason is
+that the author has gained the most familiarity with \el{} and \cl{}.  The two
+are reasonably similar in a number of ways, especially with \el{} growing a lot
+in recent years.  \el{} used to have only dynamic scope, yet gained optional
+lexical scope in version 24.1\cite{Emacs-Lexical},% \footnote{See
+  % \url{https://www.gnu.org/software/emacs/news/NEWS.24.1}}
+giving \el{} both lexical and dynamic scope, as with \cl{}.  Also, in the next
+version of Emacs, which will probably become version
+25.1\cite{emacs-pretest},% \footnote{See
+  % \url{http://permalink.gmane.org/gmane.emacs.announce/59} for a source tarball.
+  % It contains a file etc/NEWS which details changes}
+CLOS-style multiple dispatch generic functions have been added, which ease
+development for many scenarios and again are a step towards \cl{}.
+
+\el{} is also quite similar to \cl{} in many other rather minor respects.  Both
+are a Lisp-2\footnote{Being a Lisp-2 means having separate namespaces for
+  functions and variables.}, both use \sym{defun} to define functions and
+\sym{defmacro} to define macros, both with a very similar and largely compatible
+grammar.  \el{} also sports a built-in package called CL which tries to emulate
+many \cl{} features, such as more features for default arguments, destructuring,
+and the \cl{} \fun{loop} macro.
+
+Emacs still has a long way to go before being as powerful as \cl{}, and probably
+never will be, as multithreading, conditions and restarts, full CLOS support,
+packages and some minor issues like returning multiple values and global symbol
+macros are still missing.
+
+As Emacs also does not feature a built-in extensible reader, this thesis
+provided one to hopefully drive Emacs development forward some more.
+
+\section{Reader internals}
+\label{sec:reader-internals}
+
+While the reader has a very simple interface, internally it must keep some
+state, in order to know how to treat the characters encountered.  Some ephemeral
+state is kept on the call stack and in closures, but the more important state is
+kept in a structure called a readtable.
+
+The readtable enables users to modify this state.  While it is possible for a
+user to modify this structure directly, it is strongly discouraged.  Emacs has
+no possibility to prevent users from seeing or modifying state, but through
+compiled closures.
+
+As a convention, symbols which are part of the public API are prefixed with
+``el-reader/'', while symbols which are not part of the public API are prefixed
+with ``el-reader//''.  Some symbols also use a sort of sub-namespace, i.e. are
+prefixed with ``el-reader//rt/''.  This helps users to distinguish between
+public API and internals on the basis of a symbol name.
+
+The public API consists mostly of functions like
+\fun{el-reader/set-macro-character}, which manipulate a readtable.
+
+Many of these functions take a readtable as an optional argument.  If no
+argument is given, the current readtable is used.  The current readtable is a
+special variable named \sym{*el-reader/readtable*}.  The default value of this
+variable is a readtable which mimics \el{}s default syntax as closely as
+possible.  While this has not been achieved at the moment, it is possible to
+complete the table with more read macros.  The heavy lifting, such as reading
+circular data structures is already present.  Also, the most common constructs
+used in \el{} are present.  
+
+The readtable provides the basis on which \elr{} decides how to treat
+characters.  Characters have exactly one syntax type.
+
+Note that not all characters which denote the same value have the same syntax
+type and traits.  It is possible for a character (for instance when escaped) to
+be treated as a constituent with the alphabetic trait, although it would
+otherwise denote a macro character.  For instance: `(' is a macro character, but
+if read as ``$\backslash$('', the open parenthesis will instead be treated as an
+alphabetic constituent.  Traits such as alphabetic will be discussed in section
+\ref{subsubsec:traits}.
+
+\subsection{Syntax types}
+\label{subsec:syntax-types}
+
+Here all syntax types are listed.  These are very similar to the syntax types in
+\cl{}, yet differ in a few points, as the main goal was not to parse \cl{} code,
+but to be compatible to \el{}.
+
+\subsubsection{Constituent}
+\label{par:constituent}
+
+Most characters are treated as ``constituent'' characters.  To be precise: if a
+character does not have a different syntax type, it is constituent.  Constituent
+characters may be part of a token.
+
+Constituent characters also have traits, which will be discussed in the next
+section.
+\subsubsection{Invalid}
+\label{subsubsection:invalid}
+
+If the reader encounters an invalid character, an error is raised.  This does
+not imply that no such char may be in the input stream.  A read macro may choose
+to skip such characters, or may use them in creative ways.  This is completely
+up to the user.  The default readtable does not specify any characters to have
+the invalid syntax type.
+
+\subsubsection{Whitespace}
+\label{par:whitespace}
+
+These are characters which serve no special meaning.  The name should be pretty
+explanatory.
+
+\subsubsection{Single escape}
+\label{par:single-escape}
+
+In standard \el{} a single escape char allows spaces and other characters which
+do not comprise a symbol by itself to be part of one.  The sequence "foo bar"
+would normally denote two tokens (from which two symbols will be created).
+Should the desired name of \emph{one} symbol be "foo bar", a backslash is needed
+(which is the sole default single escape char): "foo$\backslash$ bar" would read
+as one token, not two.  This works in vanilla \el{}, although the author has
+never seen this in the wild.
+
+In \cl{} this is more important, as the reader up-cases all chars by default,
+which escaping also inhibits.  This aspect of \cl{} was not incorporated into
+\elr{}, as it is probably only present in \cl{} for historic reasons.
+
+\subsubsection{Multiple escape}
+\label{par:multiple-escape}
+
+These chars are similar to single escape chars.  While a single escape only
+escapes the next char, a multiple escape char escapes all chars up to the next
+multiple escape char.  In \cl{} the `|' character is used by default, in
+\elr{} the functionality is present, yet no character has been assigned, as
+most users would not expect the pipe character to behave in such a way.
+
+\subsubsection{Terminating macro character}
+\label{par:terminating-macro-char}
+
+These characters are what make read macros so interesting.  Every macro
+character has an associated function, which is called with the character and the
+current stream as arguments.
+
+A function associated with a macro char may have no side effects apart from
+advancing the stream, as such a function may make no assumptions about the
+number of times an object is read.  Such a function may read one char at a time,
+put back one read char which it has just read, and call \fun{read} on the
+(possibly advanced) stream.
+
+The function which is associated with a macro character shall return the read
+object.
+
+Terminating macro characters also terminate any token which may have been read
+before encountering the macro character.  For example, `(' is a Terminating
+macro character, which reads a list.  When the reader encounters the string
+"foo(\ldots{}" it reads the constituents `f' `o' and `o'.  When `('---which is a
+\emph{terminating} macro character---is encountered, it is put back into the
+stream, and "foo" is treated as a token.  In the next call to \fun{read} (should
+there be any), the function associated with `(' will be called, which in turn is
+the result of the read call.
+
+\subsubsection{Non-terminating macro character}
+\label{subsubsec:non-terminating-macro-char}
+
+These characters are very similar to \emph{terminating} macro characters.  The
+only difference is how such a character is treated when constituents have been
+read.  While reading a token, a terminating macro character is put back into the
+stream and the already read characters form a token.  When a
+\emph{non}-terminating macro character is encountered, the character is treated
+as if it was a constituent and its function is \emph{not} called.  If no
+constituents have been read before, an non-terminating macro character is
+treated the same as a terminating macro character.
+
+
+\subsubsection{Traits}
+\label{subsubsec:traits}
+
+Every character which is a constituent also has one or more traits, which
+provide further information on its use.
+
+\paragraph{Alphabetic}
+\label{par:alphabetic}
+
+characters are characters which may appear in a token.  Escaping may force this
+trait on an otherwise non-constituent character.
+
+\paragraph{Digit}
+\label{par:digit}
+
+characters may be treated as a number, if they form a token, and they are
+compatible with the input base.
+
+\paragraph{Package marker}
+\label{par:package-marker}
+
+characters were only implemented because \cl{} has them.  The only character
+with this trait is the colon.  As Emacs uses so called obarrays to intern its
+symbols, and it is not possible to intern a symbol into more than one
+array\cite{no-multi-intern}, it is not possible to clone \cl{}s packaging
+mechanism to Emacs.
+
+\paragraph{Plus sign, minus sign, dot, decimal point, ratio marker and exponent marker}
+\label{par:number-traits}
+
+are used while constructing numbers.
+
+\paragraph{Invalid}
+\label{par:invalid}
+
+Should a character with this trait be encountered, an error is thrown.  So far,
+\elr{} does not specify any characters to be of invalid trait.
+
+\section{API overview}
+\label{sec:api-overview}
+
+The API of \elr{} takes lots of inspiration from the corresponding API in
+\cl{}, as the two languages are sufficiently similar, and \cl{} has a very
+mature library.  Also, it may be expected that some \el{} developers are
+familiar with \cl{} read macros.  Those who are not may benefit from the
+similarity, as learning and reference material on \cl{} read macros seems to be
+more widely available than for any other Lisp, probably due to its stable
+standard.  \footnote{Paul Grahams book ``On Lisp''\cite[p.~224]{on-lisp}
+  contains a chapter explaining both regular macros and read macros.}
+
+\subsection{The readtable}
+\label{subsec:readtable}
+
+The only user visible data structure is the readtable.  In \cl{} this type has
+non-enumerable types, while in \elr{} it is defined in terms of
+\fun{defclass}, hence is enumerable and even has public attributes.  Most users
+will need none of these.  They are mostly needed when creating a completely new
+readtable from scratch.
+
+
+
+% \section{References}
+% \label{sec:references}
+% \begin{description}
+% \item[{srfi-10}] \url{http://srfi.schemers.org/srfi-10/srfi-10.html}
+% \item[{dynamic scope misnomer}] \url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html}
+% \end{description}
+
+\bibliographystyle{abbrvdin}
+\bibliography{references}
+
+\end{document}
+
+%%%% Local Variables:
+%%%% TeX-command-extra-options: "-shell-escape"
+%%%% End:
