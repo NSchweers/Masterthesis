@@ -1,0 +1,67 @@
+#+TITLE: Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp
+
+#+LATEX_CLASS_OPTIONS: [a4paper]
+#+latex_header: \usepackage{todonotes}
+
+#+MACRO: el \el{}
+#+MACRO: cl \cl{}
+#+MACRO: sym \sym{$1}
+#+MACRO: fun \fun{$1}
+#+MACRO: elr el-reader
+
+#+LATEX: \newcommand{\el}{Emacs Lisp}
+#+LATEX: \newcommand{\cl}{Common Lisp}
+#+LATEX: \newcommand{\sym}[1]{\texttt{#1}}
+#+LATEX: \newcommand{\fun}[1]{\texttt{#1}}
+
+#+BEGIN_abstract
+  This thesis discusses the design and implementation of a proof of concept for
+  an \el{} compatible reader for extensible syntaxes, in \el{}.  In Lisp
+  parlance, the reader is the part of the interpreter/compiler, which converts
+  the characters in the source code to data structures, which are then further
+  processed.  In an extensible reader, new syntactic constructs may be defined.
+  These new constructs take effect when specific characters are encountered in
+  the source code, and may interact with the existing reader to create arbitrary
+  data structures which are later either interpreted or compiled by the Lisp
+  environment.
+
+  Some other languages feature such capabilities, of which \cl{} is most widely
+  known.  Some Scheme implementations also provide these or similar
+  possibilities, yet this is not part of the standard.  SRFI-10 provides a
+  specific character sequence with which all read macros must
+  start. \cite{srfi-10}
+
+  In \cl{} the possibility to interact with the reader is called a read macro or
+  reader macro, and this term will also be used throughout this thesis.
+
+  \el{} does not provide reader macros.  As of the upcoming version 25.1 the
+  reader is implemented in C and does not provide any hooks into it, apart from
+  the usual advice system, which all \el{} functions provide.
+
+  The code underlying this thesis provides a means to replace the reader built
+  into Emacs.  The main point of this thesis is to show that the flexible nature
+  of a Lisp environment may be used to replace even such a crucial part of the
+  system as the reader at runtime, without affecting unrelated parts, or making
+  the original part unavailable.
+#+END_abstract
+
+* Lisp Basics (?)
+** Reader
+
+** Macroexpander
+
+** Evaluator
+* Motivation (why read macros matter)
+* Reader basics
+** Important Lisp Data Types (?)
+*** Symbols
+*** Lists
+* Why Emacs?
+* Reader internals
+** Syntax types
+** Traits
+* API Overview
+** Readtable
+** Functions
+* Creating new macros
+* Implementation details (?)

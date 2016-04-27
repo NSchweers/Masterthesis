@@ -1,5 +1,5 @@
-% Created 2016-03-18 Fri 14:40
-\documentclass[b5paper,8pt,twoside]{article}
+\documentclass[a4paper,10pt,twoside]{article}
+%\documentclass[b5paper,8pt,twoside]{article}
 %\documentclass[a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -23,7 +23,16 @@
 \usepackage{comment}
 \usepackage{listings}
 \usepackage{lipsum}
-%\usepackage{biblatex}
+\usepackage{tikz}
+
+\usetikzlibrary{trees}
+%\tikzstyle op=[draw, circle]
+%\tikzstyle arg=[]
+\tikzstyle op=[inner sep=0,draw,circle,minimum size=0.8cm,execute at begin node=$,execute at end node=$]
+\tikzstyle arg=[minimum size=.6cm,inner sep=0,draw,circle,fill=gray!50!white]
+
+
+
 \author{Nathanael Schweers}
 \date{\today}
 \title{Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp}
@@ -38,6 +47,7 @@
 \newcommand{\sym}[1]{\texttt{#1}}
 \newcommand{\fun}[1]{\texttt{#1}}
 \newcommand{\emacs}{GNU Emacs}
+\newcommand{\unix}{\textsc{unix}}
 
 \newenvironment{myEnv} [2]
 {\begin{frame} \frametitle{#1} \framesubtitle{#2} \begin{center}}
@@ -47,7 +57,48 @@
 {\begin{listing}[h] \label{#1} \caption{#2} \begin{verbatim}}
 {\end{verbatim} \end{listing}}
 
-\newminted{cl}{}
+%\newminted{cl}{}
+
+\lstset{         %
+  language=Lisp, %
+  frame=single,  %
+  float,         %
+  captionpos=b}
+
+\lstdefinestyle{lispcode}{
+  language=Lisp,
+  basicstyle=\small,
+  frame=single,
+  float,
+  captionpos=b,
+  %stringstyle=\color{red},
+  %keywordstyle=\bfseries\color{purple}
+  showstringspaces=false
+}
+
+\lstdefinestyle{lispinline}{
+  language=Lisp, 
+  showstringspaces=false}
+
+\lstdefinestyle{pythoncode}{
+  language=python,
+  basicstyle=\small,
+  showstringspaces=false
+}
+
+\lstdefinestyle{rubycode}{
+  language=ruby,
+  basicstyle=\small,
+  float,
+  captionpos=b,
+  showstringspaces=false
+}
+
+\lstdefinestyle{rubyinline}{
+  language=ruby,
+  basicstyle=\small,
+  showstringspaces=false
+}
 
 \begin{document}
 
@@ -85,45 +136,341 @@
   the original part unavailable.
 \end{abstract}
 
-\section{Ideas}
-\label{sec-1}
+\section{A brief history of Lisp}
+\label{sec:lisp-hist}
 
-\begin{listing}[h]
-\label{lbl:test}
-\caption{A caption}
-\begin{verbatim}
-(message "hello")
-\end{verbatim}
-\end{listing}
+Pinpointing Lisps exact moment of birth is rather difficult, as it is often the
+case with Ideas which take some time to develop.  John McCarthy published a
+paper in 1960 on the language\cite{rec-fun-sym-expr} in which some ideas,
+notation among others, from Alonzo Church’s $\lambda$-calculus are used.
 
-% \begin{sourcecode}{mint:test}{A caption}
-% (message "Hello")
-% \end{sourcecode}
+The gist of the paper is that McCarthy devised a theoretic system to represent
+functions in programs.  This was originally meant as a theoretic foundation,
+yet, as McCarthy writes in his retrospective notes on Lisp history
+\cite{lisp-hist}: “S.R. Russell noticed that eval could serve as an interpreter
+for LISP, promptly hand coded it, and we now had a programming language with an
+interpreter.”
 
-\subsection{Basics: What does a reader do?}
-\label{sec-1-1}
-\subsubsection{Read simple syntax (lists, symbols, strings, etc) (mention atoms?)}
-\label{sec-1-1-1}
-\subsubsection{Read more complex structures (quote, function)}
-\label{sec-1-1-2}
-\subsection{How do read macros work?}
-\label{sec-1-2}
-\subsection{How do read macros look?}
-\label{sec-1-3}
+While it may have been an accident that Lisp got an implementation, thus
+becoming an actual programming language at the time that it did, the foundation
+was laid down at that time, so it could have happened at any later point.
 
-\section{Introduction}
-\label{sec:introduction}
-In this thesis, a \cl{} like extensible reader for \el{} is discussed.  Before
-discussing the reader itself, it is important to discuss what a reader does,
-what it can do, and how the built-in reader in \emacs{} differs from the
-extensible one discussed in this thesis, or the \cl{} reader, from which this
-reader draws its inspiration.
+As Lisp introduced several ideas which were new to programming, resulting in
+high expressive power, it quickly became popular in some circles, especially the
+artificial intelligence community, of which McCarthy war a part.  This was
+probably simply because Lisp was more powerful than any other language of the
+time, even though it was very slow.  Paul Graham nicely listed 9 particularly
+important ideas: \cite{pg-lisp-diff}
 
-For this purpose, Lisps syntax, and how it is different from almost all other
-languages, is discussed.
+\begin{description}
+\item [Conditionals] A conditional is an if-then-else construct. We take these
+  for granted now. They were invented by McCarthy in the course of developing
+  Lisp. (Fortran at that time only had a conditional goto, closely based on the
+  branch instruction in the underlying hardware.) McCarthy, who was on the Algol
+  committee, got conditionals into Algol, whence they spread to most other
+  languages.
+\item[A function type] In Lisp, functions are first class objects-- they're a
+  data type just like integers, strings, etc, and have a literal representation,
+  can be stored in variables, can be passed as arguments, and so on.
+\item[Recursion] Recursion existed as a mathematical concept before Lisp of
+  course, but Lisp was the first programming language to support it. (It's
+  arguably implicit in making functions first class objects.)
+\item[A new concept of variables] In Lisp, all variables are effectively
+  pointers. Values are what have types, not variables, and assigning or binding
+  variables means copying pointers, not what they point to.
+\item[Garbage Collection] 
+\item[Programs composed of expressions] Lisp programs are trees of expressions,
+  each of which returns a value. (In some Lisps expressions can return multiple
+  values.) This is in contrast to Fortran and most succeeding languages, which
+  distinguish between expressions and statements.
 
-It is also shown what can be done with such an extensible reader, and why one
-might want to use such extensions.
+  It was natural to have this distinction in Fortran because (not surprisingly
+  in a language where the input format was punched cards) the language was
+  line-oriented. You could not nest statements. And so while you needed
+  expressions for math to work, there was no point in making anything else
+  return a value, because there could not be anything waiting for it.
+
+  This limitation went away with the arrival of block-structured languages, but
+  by then it was too late. The distinction between expressions and statements
+  was entrenched. It spread from Fortran into Algol and thence to both their
+  descendants.
+
+  When a language is made entirely of expressions, you can compose expressions
+  however you want. You can say either (using Arc syntax)
+
+  \begin{lstlisting}[style=lispinline]
+    (if foo (= x 1) (= x 2))
+  \end{lstlisting}
+
+  or
+
+  \begin{lstlisting}[style=lispinline]
+    (= x (if foo 1 2))
+  \end{lstlisting}
+
+\item[A symbol type] Symbols differ from strings in that you can test equality
+  by comparing a pointer.
+\item[A notation for code] using trees of symbols.
+\item[The whole language always available] There is no real distinction between
+  read-time, compile-time, and runtime. You can compile or run code while
+  reading, read or run code while compiling, and read or compile code at
+  runtime.
+
+  Running code at read-time lets users reprogram Lisp's syntax; running code at
+  compile-time is the basis of macros; compiling at runtime is the basis of
+  Lisp's use as an extension language in programs like Emacs; and reading at
+  runtime enables programs to communicate using s-expressions, an idea recently
+  reinvented as XML.
+\end{description}
+
+Given only the original paper, it is unclear whether or not functions had a
+separate data type, as Graham implies.  The paper seems to suggest that a
+function is simply a list which happens to be called or evaluated.  This is
+still possible in at least some Lisps, \el{} among them.  \footnote{Note that
+  this does not mean that a function is necessarily merely a list of a
+  particular form, or that any guarantees on the form are given.}  The point
+Graham makes stays though: it was possible to create functions at runtime and
+pass them around as any other value.
+
+Lisp was originally supposed to adopt a different syntax, especially for
+function calls and definitions.  McCarthy even used this syntax, called
+M-expressions, in his original paper \cite{rec-fun-sym-expr}.  They were to be
+translated into S-expressions (short for Symbolic expressions).  While in the
+original paper the syntactic representation of S-expressions and lists was
+slightly different, they essentially had their current form, namely consisting
+of symbols and lists, using a prefix scheme, i.e. having the operator as the
+first element of a list.
+
+McCarthy himself used the term S-expression for symbols, while today most Lisp
+programmers use the term S-expression, or sexp for short, to mean any string of
+characters which may be read by a Lisp implementation.  The latter meaning will
+be used in this thesis from now on.
+
+This proposed translation was not merely a syntactic, let alone cosmetic change.
+Compilers and interpreters in general need some form of source representation
+which is above the character level of the source code which they take as input.
+This is typically called an abstract syntax tree (AST)\footnote{The exact
+  differences and relationships between ASTs, concrete syntax trees and the like
+  are beyond the scope of this thesis.}.  Lisp, being a dynamically typed
+language, allows the syntax tree to be particularly simple.  While a tree in a
+statically typed language may need structures to differentiate between a
+function call (which has a name and one or more arguments), and a number
+literal, in Lisp one can simply use dynamic typing.  This way, numbers, strings,
+symbols etc. can be put directly in place, while nested lists provide the tree
+structure needed.
+
+As Lisp programs can be represented with data structures which Lisp provides,
+higher-order programs became possible quite early in the history of computers.
+Lisps syntax and its relationship to metaprogramming is discussed in further
+detail in section \ref{sec:lisp-basics}.
+
+\section{What is Emacs?}
+\label{sec:emacs-intro}
+
+Emacs was at first a text editor at MIT, written in machine language and
+extensible with an interpreted command language.  The interpreter was taken from
+TECO, another text editor used at MIT at the time.  According to Stallman there
+was an implementation on a Lisp Machine and later on Multics.  Both of these
+were written in Lisp, hence were extensible in Lisp.  When Stallman started the
+GNU project, he needed an implementation for \unix{}.  While Lisp compilers were
+somewhat available, they could not perform runtime type checks at the same speed
+as Lisp Machines could, hence one had to choose performance or safety, but could
+not have both. \footnote{Why Stallman felt that using C instead of an optimizing
+  Lisp compiler is beyond me.  Both suffer from the lack of type checking, while
+  using Lisp would have been far more productive than programming in C.
+  Possibly the lack of decent free Lisp compilers played a part in this
+  decision.} Stallman decided to write a Lisp interpreter and editor primitives
+like display handling in C, while writing as many higher level functions as
+possible in Lisp.  The dialect he designed and implemented is called \el{}, or
+elisp for short\footnote{Note though, that there once was an unrelated dialect
+  of the name elisp.}\cite{emacs-hist}.  In 1984 Stallman wrote what is now
+known as GNU Emacs.\cite{emacs-first-release} Since then, \el{} has grown and
+changed a lot.
+
+While Emacs is primarily a text editor, it achieves its extensibilty by
+being/providing a virtual Lisp Machine.  So far only some experimental features
+exist to incorporate shared objects into a running instance of Emacs, so the
+only ways to add features is to modify the C code base, which requires
+recompilation, or by loading \el{} code.  All C functions which users may need,
+are exported to Lisp, and are largely indistinguishable from Lisp functions,
+macros or special forms.  This extensibility has made Emacs one of the most
+powerful editors available.  For the rest of this thesis, the editing
+capabilities of Emacs are rather unimportant.  The thesis will concentrate more
+on the Lisp Machine part of Emacs.
+
+The capabilities of \el{} have drastically improved over the last years.  Until
+Emacs 24.1 \el{} only featured dynamic scope\cite{Emacs-Lexical}. \footnote{See
+  \cite{CLTL2}
+  (\url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html})for an
+  explanation of why ``dynamic scope'' is a misnomer, yet still useful as a
+  term.  While the differences in scope and extent are interesting, they are not
+  relevant to this thesis.}  In the version of Emacs which will probably be
+named 25.1 Emacs will also feature \cl{} style multimethods.  As these methods
+were used for the code in this thesis, said code requires at least a pretest
+version of Emacs\cite{emacs-pretest}.
+
+\section{What makes Lisp special}
+\label{sec:lisp-basics}
+
+As outlined at the end of section \ref{sec:lisp-hist}, Lisp code can be
+represented in its own data structures.  This sets it apart from most (if not
+all) mainstream languages in use today. As this is vital to the rest of this
+thesis, it is discussed in detail here.
+
+As an example, we will transform a simple algebraic expression.  The simple
+expression \(a + b * c\) put into tree form can be seen in figure
+\ref{fig:simple-tree}.
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture} %[every node/.style = {shape=circle, draw}]
+    \node [op] {+} child { node [arg] {a} } child { node [op] {\times}
+      child { node [arg] {b} } child { node [arg] {c} } };
+  \end{tikzpicture}
+  
+  \caption{Tree form of an algebraic expression}
+  \label{fig:simple-tree}
+\end{figure}
+
+Given lists of arbitrary length, symbols and dynamic typing, the same tree may
+also be represented like this:
+
+% Given a list notation as used in Lisp, i.e. parentheses and spaces which delimit
+% elements, together with prefix notation, it may as well look like this:
+
+\begin{lstlisting}[style=lispinline]
+  (+ a (* b c))
+\end{lstlisting}
+
+Note that precedence of multiplication over addition is implicit in the
+algebraic form (i.e. must be known to any human or program attempting any
+transformation), yet explicitly given in both tree diagram and list
+representation.  Given that Lisp syntax is given as nested lists, symbols and
+prefix notation, is becomes apparent that Lisp only has syntax for an AST.  This
+means that programmers do not enter syntactic forms, but directly enter the AST
+for their programs.
+
+This may put off some programmers as unaesthetic\footnote{Many non-lispers claim
+  that Lisps syntax---or lack thereof---is difficult to read, yet I and many
+  other Lisp programmers disagree.  Once a programmer has become accustomed to
+  this kind of source code, it can become quite appealing, and the parenthesis
+  are not as intrusive to the mind as many initially suspect.}.  While it is
+difficult to meaningfully argue over such subjective topics, there are technical
+advantages to this approach.
+
+The advantages come in at least four categories:
+
+\begin{enumerate}
+\item Possibility of higher order programs, i.e. macros.
+\item Possibility of communicating via sexps, similar to XML.
+\item Possibility of very powerful editing tools.
+\item Possibility of a customizable syntax.
+\end{enumerate}
+
+The first category enables programs which transform and write programs.  This
+can even happen at runtime, if needed, and---depending on the particular Lisp
+implementation---may even be compiled at runtime to provide high speed.
+
+The second category simply means that data may be printed and read back in the
+languages own syntax, without having the need to devise an own syntax along with
+a parser.  This also frees the programmer from having to learn another language.
+
+The third category is---for the most part---beyond the scope of this thesis,
+although the customizability of the languages syntax does pose a problem for
+such tools.  The gist of these tools is that they can view the source code in a
+similar fashion as the reader does: as a tree of expressions.  Such tools
+attempt to disallow and thus prevent the user from making any changes to the
+source, which would result in an incorrect tree.  This does not mean that the
+source will always be free of errors: function calls may still have too many or
+too few arguments, functions or variables may be undefined.  Yet it is not
+possible to have too many opening or closing parens.
+
+These tools offer tremendous editing power, as they allow the programmer to
+perform operations on a tree.  Two examples of such tools for Emacs are
+paredit\cite{paredit} and lispy\cite{lispy}.  Both these tools are for Emacs and
+both are primarily directed at \el{}.  Yet because of the simplicity and
+(syntactic) similarity of Lisps, both tools can also be used for other Lisps
+like \cl{}, albeit with some restrictions and annoyances.\todo{add a reference
+  to the appropriate section, should I opt to add one.}
+
+The fourth category it the subject of this thesis.  Before discussing how an
+extensible reader works, it is necessary to first understand what a reader does,
+whether it is extensible or not.
+
+\subsection{The reader}
+\label{subsec:reader}
+
+The reader is a part of a Lisp system.  As outlined before, a string of
+characters (source code) is transformed into an AST in any language.  In Lisp,
+the syntactic layer is very thin, which makes the structure of the resulting AST
+apparent in the source code, as no special constructs are needed for loops,
+function definitions, types or the like.
+
+\subsection{Print syntax}
+\label{subsec:print-syntax}
+
+The printer is a part of a Lisp system, which works in tandem with the reader.
+While a reader converts a textual representation into an object, the printer
+converts an object into a textual representation.
+
+As Lisp systems tend to be highly interactive, most lisps provide a means to
+print values to a stream.  What Lisp does is slightly different to what many
+other languages offer, as Lisp can often print back values in a way which are
+valid input syntax.  How a data type is printed depends on the Lisp dialect.
+Also not every dialect can print every data type.  Common Lisp by default cannot
+print hash tables, and hardly any lisp has a meaningful printed representation
+for functions---\el{} being an exception here.
+
+Lists are among the types which have not only meaningful print syntax, but also
+one, which is compatible with its read syntax.  This means that a list, as shown
+above, looks the same when printed, as it did in the source code---with minor
+exceptions, which have to do with evaluation.  The details of reading and
+evaluation are discussed later\todo{add ref}.  For now it is sufficient to say,
+that reading the expression 
+
+\begin{lstlisting}[style=lispinline]
+  (+ a (* b c))
+\end{lstlisting}
+
+results in a Lisp object.  When this object is printed back, it looks (almost)
+exactly the same\footnote{A few things, such as comments and indentation are
+  lost, but otherwise it looks the same.}.  In Emacs, this can easily be tried
+out: In the *scratch* buffer, put the following expression: \textbf{(read "(+ a
+  (* b c))")}, place the cursor on the end of the expression and press C-c C-e.
+The very same text should appear on the status line.  The same can be done in
+almost any lisp environment in some form.  
+
+This allows users to print data to a file or network and read them back in
+again.  This is what Paul Graham meant when he claimed that programs
+communicating via sexps was an idea recently reinvented by XML.
+
+\begin{comment}
+  The reason why lisp code has so many parentheses, is that parentheses denote a
+  list in Lisp.  Expressions in general, save the most trivial ones, are
+  represented of lists containing other lists and symbols.\footnote{Plus of
+    course other entities such as numbers, yet these are not relevant to this
+    discussion.}
+\end{comment}
+% \section{Introduction}
+% \label{sec:introduction}
+
+% This thesis discusses the design, implementation, and idiosyncrasies of \elr{},
+% an extensible reader for \el{}.  An overview over the history of Lisp, Emacs and
+% \el{} are given, as well as an introduction to 
+
+% \section{Introduction}
+% \label{sec:introduction}
+% In this thesis, a \cl{} like extensible reader for \el{} is discussed.  Before
+% discussing the reader itself, it is important to discuss what a reader does,
+% what it can do, and how the built-in reader in \emacs{} differs from the
+% extensible one discussed in this thesis, or the \cl{} reader, from which this
+% reader draws its inspiration.
+
+% For this purpose, Lisps syntax, and how it is different from almost all other
+% languages, is discussed.
+
+% It is also shown what can be done with such an extensible reader, and why one
+% might want to use such extensions.
 
 % The application of such an extensible reader allows the creation of new
 % syntactic constructs, which may be embedded into the language.  Thus, it enables
@@ -188,9 +535,13 @@ structures.  Most modern programming languages provide some syntax to enter hash
 tables.  Take for instance python, where the keys and values may be specified
 between curly braces:
 
-\begin{minted}[]{python}
+% \begin{minted}[]{python}
+% {"foo": "bar", "five": 5}
+% \end{minted}
+
+\begin{lstlisting}[style=pythoncode]
 {"foo": "bar", "five": 5}
-\end{minted}
+\end{lstlisting}
 
 When entered into a python interpreter, this expression returns a hash table (or
 Dictionary in Python terminology).
@@ -198,9 +549,13 @@ Dictionary in Python terminology).
 Clojure, a rather recent addition to the Lisp family of languages also features
 a similar syntax:
 
-\begin{minted}[]{clojure}
+% \begin{minted}[]{clojure}
+% {"foo" "bar" "five" 5}
+% \end{minted}
+
+\begin{lstlisting}[style=lispinline]
 {"foo" "bar" "five" 5}
-\end{minted}
+\end{lstlisting}
 
 This also returns a mapping from keys to values.
 
@@ -212,13 +567,28 @@ users may create such a syntax themselves, yet \el{} users never had this
 possibility.
 
 In the absense of read macros, one possible shortcut is to simply define a
-function to do so; consider the function \fun{ht} in listing \ref{mint:cl-ht}
-from the source code of this thesis, ported to \cl{}. In \ref{lbl:test}
+function to do so; consider the function \fun{ht} in listing \ref{code:cl-ht}
+from the source code of this thesis, ported to \cl{}.
 
-\lipsum[0]
+% \begin{listing}[h]
+% \caption{Creating a hash table.}
+% \label{mint:cl-ht}
+% \begin{clcode}
+% (defun ht (&rest args)
+%   "Create and return a hashtable.
 
-\lstset{language=Lisp}
-\begin{lstlisting}[caption=my caption\label{lbl:test},frame=single,float]
+% Keys and values are given alternating in args."
+%   (let ((h (make-hash-table)))
+%     (loop for (key value) on args by #'cddr
+%        do (if (and key value)
+%               (setf (gethash key h) value)
+%               (error "Odd number of arguments passed")))
+%     h))
+% \end{clcode}
+% \end{listing}
+
+\begin{lstlisting}[style=lispcode,caption={Creating a hash
+  table.},label={code:cl-ht}]
 (defun ht (&rest args)
   "Create and return a hashtable.
 
@@ -230,52 +600,47 @@ Keys and values are given alternating in args."
               (error "Odd number of arguments passed")))
     h))
 \end{lstlisting}
-
-
-\begin{listing}[h]
-\caption{Creating a hash table.}
-\label{mint:cl-ht}
-\begin{clcode}
-(defun ht (&rest args)
-  "Create and return a hashtable.
-
-Keys and values are given alternating in args."
-  (let ((h (make-hash-table)))
-    (loop for (key value) on args by #'cddr
-       do (if (and key value)
-              (setf (gethash key h) value)
-              (error "Odd number of arguments passed")))
-    h))
-\end{clcode}
-\end{listing}
 This may be used as
 
-\begin{clcode}
+% \begin{clcode}
+% (ht "foo" "bar" "five" 5)
+% \end{clcode}
+
+\begin{lstlisting}[style=lispinline]
 (ht "foo" "bar" "five" 5)
-\end{clcode}
+\end{lstlisting}
+
 
 instead of the more cumbersome and repetitive code shown in listing
-\ref{mint:cl-canon-ht}.
+\ref{code:cl-canon-ht}.
 
-\begin{listing}[h]
-\begin{clcode}
+% \begin{listing}[h]
+% \begin{clcode}
+% (let ((h (make-hash-table)))
+%   (prog1 h
+%     (setf (gethash "foo" h) "bar")
+%     (setf (gethash "five" h) 5)))
+% \end{clcode}
+% \caption{Canonical way to create a hash table.}
+% \label{mint:cl-canon-ht}
+% \end{listing}
+
+\begin{lstlisting}[style=lispcode,caption={Canonical way to create a hash
+  table.},label={code:cl-canon-ht}]
 (let ((h (make-hash-table)))
   (prog1 h
     (setf (gethash "foo" h) "bar")
     (setf (gethash "five" h) 5)))
-\end{clcode}
-\caption{Canonical way to create a hash table.}
-\label{mint:cl-canon-ht}
-\end{listing}
+\end{lstlisting}
 
 To further shorten and clarify the creation of hash tables, \cl{} users may use
-a read macro. Listing \ref{mint:cl-hash-reader} shows how this may be done
-(assuming \fun{ht} has been defined as in listing \ref{mint:cl-ht}).
+a read macro. Listing \ref{code:cl-hash-reader} shows how this may be done
+(assuming \fun{ht} has been defined as in listing \ref{code:cl-ht}).
 \footnote{The details of this code are not of particular importance, merely that
   it is possible, and quite short.}
 
-\begin{listing}[h]
-\begin{clcode}
+\begin{lstlisting}[style=lispcode,caption={A \cl{} read macro to read hash
+  tables}.,label={code:cl-hash-reader}]
 (set-macro-character #\} (get-macro-character #\)))
 
 (set-macro-character
@@ -286,19 +651,16 @@ a read macro. Listing \ref{mint:cl-hash-reader} shows how this may be done
      (if (oddp (length k-v))
          (error "Invalid syntax: {}")
          `(ht ,@k-v)))))
-\end{clcode}
-\caption{A \cl{} read macro to read hash tables.}
-\label{mint:cl-hash-reader}
-\end{listing}
+\end{lstlisting}
 
 Now the \cl{} reader reads ``\{\ldots{}\}'' constructs in a similar fashion as
 the Clojure reader does.
 
 Given \elr{}, i.e. the code from this thesis, the code in listing
-\ref{mint:el-hash-reader} may be used in \el{} to produce the same effect.
+\ref{code:el-hash-reader} may be used in \el{} to produce the same effect.
 
-\begin{listing}[h]
-\begin{clcode}
+\begin{lstlisting}[style=lispcode,caption={An equivalent read macro using
+  \elr{}.}, label={code:el-hash-reader}]
 (defun ht (&rest args)
   "Create and return a hashtable.
 
@@ -320,10 +682,7 @@ Keys and values are given alternating in args."
       (if (= (mod (length k-v) 2) 1)
           (error "Invalid syntax: {}")
         `(el-reader//ht ,@k-v))))))
-\end{clcode}
-\label{mint:el-hash-reader}
-\caption{An equivalent read macro using \elr{}.}
-\end{listing}
+\end{lstlisting}
 
 Note the similarity of the API.  The prefixes have been put in place, as \el{}
 provides no packaging facilities.\footnote{Should Emacs change the internal
@@ -353,15 +712,16 @@ An example for this is something similar to rubys \texttt{\%w} construct.  It
 reads a list of tokens, converts them to strings and makes an array out of
 them.  
 
-\begin{minted}{ruby}
-%w(foo bar spam and eggs) => ["foo", "bar", "spam", "and", "eggs"]
-\end{minted}
+\begin{lstlisting}[style=rubyinline]
+%w(foo bar spam and eggs) 
+# => ["foo", "bar", "spam", "and", "eggs"]
+\end{lstlisting}
 
 While ruby is very flexible about the delimiters, one might define
-\texttt{\#w(...)} in Lisp as in listing \ref{mint:elr-ruby-words}
+\texttt{\#w(...)} in Lisp as in listing \ref{code:elr-ruby-words}
 
-\begin{listing}[h]
-\begin{clcode}
+\begin{lstlisting}[style=lispcode,caption={A read macro for rubys word
+  syntax.}, label={code:elr-ruby-words}]
 (defvar *my-read-stuff/word-seq-types*
   {'cons #'list 
    'vector #'vector})
@@ -384,10 +744,7 @@ While ruby is very flexible about the delimiters, one might define
 (el-reader/set-dispatch-macro-character
  ?# ?w
  #'my-read-stuff/read-words)
-\end{clcode}
-\label{mint:elr-ruby-words}
-\caption{A read macro for rubys words syntax.}
-\end{listing}
+\end{lstlisting}
 
 While this version uses different delimiters for different types of return value
 (parentheses form a list, square brackets form a vector), it can only use
@@ -398,10 +755,10 @@ for large constants.
 
 Here is how it is used:
 
-\begin{clcode}
+\begin{lstlisting}[style=rubyinline]
 #w(foo bar spam eggs) => ("foo" "bar" "spam" "eggs")
 #w[foo bar spam eggs] => ["foo" "bar" "spam" "eggs"]
-\end{clcode}
+\end{lstlisting}
 
 \section{Lisp Basics}
 \label{subsec:lisp-basics}
@@ -424,11 +781,11 @@ As an example, here is some code which performs a variable binding with
 \fun{let} (which is a special form), an assignment with \fun{setf} (a macro) and
 a function call to \fun{message}.
 
-\begin{clcode}
+\begin{lstlisting}[style=lispinline]
 (let ((var 5))
   (setf var "Hello")
   (message "%s" var))
-\end{clcode}
+\end{lstlisting}
 
 When Lisp source code is processed, it goes through three distinct stages:
 reading, macro expansion (optionally this can also be a compile phase), and
@@ -527,9 +884,9 @@ In Lisp a function call happens when the evaluator comes across a list form.  In
 such a case the first element is taken to be a function and the other elements
 are its arguments.  Here is the canonical hello world program for \el{}:
 
-\begin{clcode}
+\begin{lstlisting}[style=lispinline]
 (print "Hello, world")
-\end{clcode}
+\end{lstlisting}
 
 Here we have a list of two elements.  The first element happens to be a symbol,
 which has a function associated with it.  The second element (a string in this
@@ -546,9 +903,9 @@ leading to a special form).  Here the low level special form was chosen.  To
 assign the value 5 to the ``variable'' \sym{x} with a such a low level special
 form, we could write the following:
 
-\begin{clcode}
+\begin{lstlisting}[style=lispinline]
 (set (quote x) 5)
-\end{clcode}
+\end{lstlisting}
 
 The \fun{quote} form around \sym{x} tells the evaluator to \emph{not} evaluate
 \sym{x}, but to pass it on as the symbol itself.  Note that the reader would
@@ -566,10 +923,10 @@ control how to evaluate their arguments.
 Unsurprisingly, a function is defined by a list form, with a special symbol as
 its first element.  In \el{} this symbol is \fun{defun}.
 
-\begin{clcode}
+\begin{lstlisting}[style=lispinline]
 (defun say-hello (text)
   (print text))
-\end{clcode}
+\end{lstlisting}
 
 Note that the third element, although it is a list, is neither evaluated, nor
 must it be quoted.  This is because \fun{defun} is a macro, and macros may
@@ -591,9 +948,9 @@ the symbol \sym{foo}, the number 3, the symbol \sym{bar} and the string "4",
 printing might result in this: \footnote{The exact form depends on the dialect.
   If not otherwise stated, is assumed.  is also used extensively.}
 
-\begin{clcode}
+\begin{lstlisting}[style=lispinline]
 (foo 3 bar "4")
-\end{clcode}
+\end{lstlisting}
 
 This may later be read back with a call to \fun{read}, to retrieve a data
 structure, which has the same shape as the original.  Note that this is not
@@ -895,11 +1252,8 @@ Here be dragons.
 % \item[{dynamic scope misnomer}] \url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html}
 % \end{description}
 
+\pagebreak
 \bibliographystyle{abbrvdin}
 \bibliography{references}
 
 \end{document}
-
-%%%% Local Variables:
-%%%% TeX-command-extra-options: "-shell-escape"
-%%%% End:
