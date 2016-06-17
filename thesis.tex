@@ -3,6 +3,7 @@
 %\documentclass[a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+%\usepackage{fontspec}
 \usepackage{fixltx2e}
 \usepackage{graphicx}
 \usepackage{longtable}
@@ -18,7 +19,7 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{cite}
 \tolerance=1000
-\usepackage{minted}
+%\usepackage{minted}
 \usepackage{todonotes}
 \usepackage{comment}
 \usepackage{listings}
@@ -30,8 +31,6 @@
 %\tikzstyle arg=[]
 \tikzstyle op=[inner sep=0,draw,circle,minimum size=0.8cm,execute at begin node=$,execute at end node=$]
 \tikzstyle arg=[minimum size=.6cm,inner sep=0,draw,circle,fill=gray!50!white]
-
-
 
 \author{Nathanael Schweers}
 \date{\today}
@@ -46,16 +45,20 @@
 \newcommand{\elr}{el-reader}
 \newcommand{\sym}[1]{\texttt{#1}}
 \newcommand{\fun}[1]{\texttt{#1}}
-\newcommand{\emacs}{GNU Emacs}
+\newcommand{\emacs}{GNU~Emacs}
+\newcommand{\emacsv}[1]{GNU~Emacs~#1}
 \newcommand{\unix}{\textsc{unix}}
+\newcommand{\windows}{MS Windows\texttrademark}
+\newcommand{\Read}{\fun{read}}
+\newcommand{\nil}{\sym{nil}}
 
-\newenvironment{myEnv} [2]
-{\begin{frame} \frametitle{#1} \framesubtitle{#2} \begin{center}}
-{\end{center} \end{frame}}
+% \newenvironment{myEnv} [2]
+% {\begin{frame} \frametitle{#1} \framesubtitle{#2} \begin{center}}
+% {\end{center} \end{frame}}
 
-\newenvironment{sourcecode} [2]
-{\begin{listing}[h] \label{#1} \caption{#2} \begin{verbatim}}
-{\end{verbatim} \end{listing}}
+% \newenvironment{sourcecode} [2]
+% {\begin{listing}[h] \label{#1} \caption{#2} \begin{verbatim}}
+% {\end{verbatim} \end{listing}}
 
 %\newminted{cl}{}
 
@@ -67,7 +70,7 @@
 
 \lstdefinestyle{lispcode}{
   language=Lisp,
-  basicstyle=\small,
+  basicstyle=\scriptsize,
   frame=single,
   float,
   captionpos=b,
@@ -136,6 +139,51 @@
   the original part unavailable.
 \end{abstract}
 
+\section{A brief history of (GNU) Emacs}
+\label{sec:emacs-intro}
+
+Emacs was at first a text editor at MIT, written in machine language and
+extensible with an interpreted command language.  The interpreter was taken from
+TECO, another text editor used at MIT at the time.  According to Richard
+Stallman \cite{emacs-hist} there was an implementation on a Lisp Machine and
+later on Multics.  Both of these were written in Lisp, hence were extensible in
+Lisp.  When Stallman started the GNU project, he needed an implementation for
+\unix{}.  As Lisp programs on regular machines could not perform runtime type
+checks at the same speed as Lisp Machines could, one had to choose performance
+or safety, but could not have both.\footnote{Why Stallman felt that using C
+  instead of an optimizing Lisp compiler is beyond me.  Both suffer from the
+  lack of type checking, while using Lisp would have been far more productive
+  than programming in C.  Possibly the lack of decent free Lisp compilers played
+  a part in this decision.} Stallman decided to write a Lisp interpreter and
+editor primitives like display handling in C, while writing as many higher level
+functions as possible in Lisp.  The dialect he designed and implemented is
+called \el{}, or elisp for short\footnote{Note though, that there once was an
+  unrelated dialect of the name elisp.}.  In 1984 Stallman wrote what is now
+known as GNU Emacs\cite{emacs-first-release}. Since then, \el{} has grown and
+changed a lot.
+
+While Emacs is primarily a text editor, it achieves its extensibilty by
+being/providing a virtual Lisp Machine.  So far only some experimental features
+exist to incorporate shared objects into a running instance of Emacs, so the
+only ways to add features is to modify the C code base, which requires
+recompilation, or by loading \el{} code.  All C functions which users may need
+are exported to Lisp, and are largely indistinguishable from Lisp functions,
+macros or special forms.  This extensibility has made Emacs one of the most
+powerful editors available.  For the rest of this thesis, the editing
+capabilities of Emacs are rather unimportant.  The thesis will concentrate more
+on the Lisp Machine part of Emacs.
+
+The capabilities of \el{} have drastically improved over the last years.  Until
+Emacs 24.1 \el{} only featured dynamic scope\cite{Emacs-Lexical}.\footnote{See
+  \cite{CLTL2}
+  (\url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html})for an
+  explanation of why ``dynamic scope'' is a misnomer, yet still useful as a
+  term.  While the differences in scope and extent are interesting, they are not
+  relevant to this thesis.}  In the version of Emacs which will probably be
+named 25.1 Emacs will also feature watered down \cl{} style multimethods.  As
+these methods were used for the code in this thesis, said code requires at least
+a pretest version of Emacs\cite{emacs-pretest}.
+
 \section{A brief history of Lisp}
 \label{sec:lisp-hist}
 
@@ -159,44 +207,52 @@ As Lisp introduced several ideas which were new to programming, resulting in
 high expressive power, it quickly became popular in some circles, especially the
 artificial intelligence community, of which McCarthy war a part.  This was
 probably simply because Lisp was more powerful than any other language of the
-time, even though it was very slow.  Paul Graham nicely listed 9 particularly
-important ideas: \cite{pg-lisp-diff}
+time, even though it was very slow.  It was slow compared to other languages of
+the time, namely machine language/assembly and FORTRAN.  It was also slow simply
+because compiler technology was not nearly as advanced as it is today.
 
-\begin{description}
-\item [Conditionals] A conditional is an if-then-else construct. We take these
-  for granted now. They were invented by McCarthy in the course of developing
-  Lisp. (Fortran at that time only had a conditional goto, closely based on the
-  branch instruction in the underlying hardware.) McCarthy, who was on the Algol
-  committee, got conditionals into Algol, whence they spread to most other
-  languages.
-\item[A function type] In Lisp, functions are first class objects-- they're a
-  data type just like integers, strings, etc, and have a literal representation,
-  can be stored in variables, can be passed as arguments, and so on.
-\item[Recursion] Recursion existed as a mathematical concept before Lisp of
-  course, but Lisp was the first programming language to support it. (It's
-  arguably implicit in making functions first class objects.)
-\item[A new concept of variables] In Lisp, all variables are effectively
-  pointers. Values are what have types, not variables, and assigning or binding
-  variables means copying pointers, not what they point to.
-\item[Garbage Collection] 
-\item[Programs composed of expressions] Lisp programs are trees of expressions,
-  each of which returns a value. (In some Lisps expressions can return multiple
-  values.) This is in contrast to Fortran and most succeeding languages, which
-  distinguish between expressions and statements.
+What makes Lisp special is discussed in greater detail in section
+\ref{sec:lisp-special}. 
 
-  It was natural to have this distinction in Fortran because (not surprisingly
-  in a language where the input format was punched cards) the language was
-  line-oriented. You could not nest statements. And so while you needed
-  expressions for math to work, there was no point in making anything else
-  return a value, because there could not be anything waiting for it.
+\begin{comment}
+  Paul Graham nicely listed 9 particularly important ideas: \cite{pg-lisp-diff}
 
-  This limitation went away with the arrival of block-structured languages, but
-  by then it was too late. The distinction between expressions and statements
-  was entrenched. It spread from Fortran into Algol and thence to both their
-  descendants.
+  \begin{description}
+  \item [Conditionals] A conditional is an if-then-else construct. We take these
+    for granted now. They were invented by McCarthy in the course of developing
+    Lisp. (Fortran at that time only had a conditional goto, closely based on
+    the branch instruction in the underlying hardware.) McCarthy, who was on the
+    Algol committee, got conditionals into Algol, whence they spread to most
+    other languages.
+  \item[A function type] In Lisp, functions are first class objects-- they're a
+    data type just like integers, strings, etc, and have a literal
+    representation, can be stored in variables, can be passed as arguments, and
+    so on.
+  \item[Recursion] Recursion existed as a mathematical concept before Lisp of
+    course, but Lisp was the first programming language to support it. (It's
+    arguably implicit in making functions first class objects.)
+  \item[A new concept of variables] In Lisp, all variables are effectively
+    pointers. Values are what have types, not variables, and assigning or
+    binding variables means copying pointers, not what they point to.
+  \item[Garbage Collection]
+  \item[Programs composed of expressions] Lisp programs are trees of
+    expressions, each of which returns a value. (In some Lisps expressions can
+    return multiple values.) This is in contrast to Fortran and most succeeding
+    languages, which distinguish between expressions and statements.
 
-  When a language is made entirely of expressions, you can compose expressions
-  however you want. You can say either (using Arc syntax)
+    It was natural to have this distinction in Fortran because (not surprisingly
+    in a language where the input format was punched cards) the language was
+    line-oriented. You could not nest statements. And so while you needed
+    expressions for math to work, there was no point in making anything else
+    return a value, because there could not be anything waiting for it.
+
+    This limitation went away with the arrival of block-structured languages,
+    but by then it was too late. The distinction between expressions and
+    statements was entrenched. It spread from Fortran into Algol and thence to
+    both their descendants.
+
+    When a language is made entirely of expressions, you can compose expressions
+    however you want. You can say either (using Arc syntax)
 
   \begin{lstlisting}[style=lispinline]
     (if foo (= x 1) (= x 2))
@@ -231,15 +287,18 @@ still possible in at least some Lisps, \el{} among them.  \footnote{Note that
   particular form, or that any guarantees on the form are given.}  The point
 Graham makes stays though: it was possible to create functions at runtime and
 pass them around as any other value.
+\end{comment}
 
 Lisp was originally supposed to adopt a different syntax, especially for
 function calls and definitions.  McCarthy even used this syntax, called
 M-expressions, in his original paper \cite{rec-fun-sym-expr}.  They were to be
 translated into S-expressions (short for Symbolic expressions).  While in the
 original paper the syntactic representation of S-expressions and lists was
-slightly different, they essentially had their current form, namely consisting
-of symbols and lists, using a prefix scheme, i.e. having the operator as the
-first element of a list.
+slightly different\footnote{McCarthy originally allowed spaces in atoms,
+  i.e. symbol names, and separated list elements with a comma.  Today spaces are
+  used to delimit elements.}, they essentially had their current form, namely
+consisting of symbols and lists, using a prefix scheme, i.e. having the operator
+as the first element of a list.
 
 McCarthy himself used the term S-expression for symbols, while today most Lisp
 programmers use the term S-expression, or sexp for short, to mean any string of
@@ -262,55 +321,10 @@ structure needed.
 As Lisp programs can be represented with data structures which Lisp provides,
 higher-order programs became possible quite early in the history of computers.
 Lisps syntax and its relationship to metaprogramming is discussed in further
-detail in section \ref{sec:lisp-basics}.
-
-\section{What is Emacs?}
-\label{sec:emacs-intro}
-
-Emacs was at first a text editor at MIT, written in machine language and
-extensible with an interpreted command language.  The interpreter was taken from
-TECO, another text editor used at MIT at the time.  According to Stallman there
-was an implementation on a Lisp Machine and later on Multics.  Both of these
-were written in Lisp, hence were extensible in Lisp.  When Stallman started the
-GNU project, he needed an implementation for \unix{}.  While Lisp compilers were
-somewhat available, they could not perform runtime type checks at the same speed
-as Lisp Machines could, hence one had to choose performance or safety, but could
-not have both. \footnote{Why Stallman felt that using C instead of an optimizing
-  Lisp compiler is beyond me.  Both suffer from the lack of type checking, while
-  using Lisp would have been far more productive than programming in C.
-  Possibly the lack of decent free Lisp compilers played a part in this
-  decision.} Stallman decided to write a Lisp interpreter and editor primitives
-like display handling in C, while writing as many higher level functions as
-possible in Lisp.  The dialect he designed and implemented is called \el{}, or
-elisp for short\footnote{Note though, that there once was an unrelated dialect
-  of the name elisp.}\cite{emacs-hist}.  In 1984 Stallman wrote what is now
-known as GNU Emacs.\cite{emacs-first-release} Since then, \el{} has grown and
-changed a lot.
-
-While Emacs is primarily a text editor, it achieves its extensibilty by
-being/providing a virtual Lisp Machine.  So far only some experimental features
-exist to incorporate shared objects into a running instance of Emacs, so the
-only ways to add features is to modify the C code base, which requires
-recompilation, or by loading \el{} code.  All C functions which users may need,
-are exported to Lisp, and are largely indistinguishable from Lisp functions,
-macros or special forms.  This extensibility has made Emacs one of the most
-powerful editors available.  For the rest of this thesis, the editing
-capabilities of Emacs are rather unimportant.  The thesis will concentrate more
-on the Lisp Machine part of Emacs.
-
-The capabilities of \el{} have drastically improved over the last years.  Until
-Emacs 24.1 \el{} only featured dynamic scope\cite{Emacs-Lexical}. \footnote{See
-  \cite{CLTL2}
-  (\url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html})for an
-  explanation of why ``dynamic scope'' is a misnomer, yet still useful as a
-  term.  While the differences in scope and extent are interesting, they are not
-  relevant to this thesis.}  In the version of Emacs which will probably be
-named 25.1 Emacs will also feature \cl{} style multimethods.  As these methods
-were used for the code in this thesis, said code requires at least a pretest
-version of Emacs\cite{emacs-pretest}.
+detail in section \ref{sec:lisp-special}.
 
 \section{What makes Lisp special}
-\label{sec:lisp-basics}
+\label{sec:lisp-special}
 
 As outlined at the end of section \ref{sec:lisp-hist}, Lisp code can be
 represented in its own data structures.  This sets it apart from most (if not
@@ -318,8 +332,9 @@ all) mainstream languages in use today. As this is vital to the rest of this
 thesis, it is discussed in detail here.
 
 As an example, we will transform a simple algebraic expression.  The simple
-expression \(a + b * c\) put into tree form can be seen in figure
-\ref{fig:simple-tree}.
+expression \(a + b \cdot c\) can be put into a tree form (figure
+\ref{fig:simple-tree}).  Note that in tree form, parentheses are no longer
+needed to group terms.  Also, all precedence becomes explicit.
 
 \begin{figure}[h]
   \centering
@@ -332,8 +347,9 @@ expression \(a + b * c\) put into tree form can be seen in figure
   \label{fig:simple-tree}
 \end{figure}
 
-Given lists of arbitrary length, symbols and dynamic typing, the same tree may
-also be represented like this:
+Alternatively, given lists of arbitrary length (represented by surrounding
+parenthesis), symbols and dynamic typing, the same tree may also be represented
+like this:
 
 % Given a list notation as used in Lisp, i.e. parentheses and spaces which delimit
 % elements, together with prefix notation, it may as well look like this:
@@ -342,13 +358,10 @@ also be represented like this:
   (+ a (* b c))
 \end{lstlisting}
 
-Note that precedence of multiplication over addition is implicit in the
-algebraic form (i.e. must be known to any human or program attempting any
-transformation), yet explicitly given in both tree diagram and list
-representation.  Given that Lisp syntax is given as nested lists, symbols and
-prefix notation, is becomes apparent that Lisp only has syntax for an AST.  This
-means that programmers do not enter syntactic forms, but directly enter the AST
-for their programs.
+Given that Lisp syntax is given as nested lists, symbols and prefix notation, it
+becomes apparent that Lisp only has (linear) syntax for ASTs.  This means that
+programmers do not enter syntactic forms, but directly enter the AST for their
+programs.
 
 This may put off some programmers as unaesthetic\footnote{Many non-lispers claim
   that Lisps syntax---or lack thereof---is difficult to read, yet I and many
@@ -356,167 +369,204 @@ This may put off some programmers as unaesthetic\footnote{Many non-lispers claim
   this kind of source code, it can become quite appealing, and the parenthesis
   are not as intrusive to the mind as many initially suspect.}.  While it is
 difficult to meaningfully argue over such subjective topics, there are technical
-advantages to this approach.
+advantages to this approach, which come in at least four categories, each of
+which are discussed in more detail in the following subsections: macros, sexp
+communication, editing tools, customizable syntax.
 
-The advantages come in at least four categories:
+\subsection{Macros}
+\label{subsec:macros}
 
-\begin{enumerate}
-\item Possibility of higher order programs, i.e. macros.
-\item Possibility of communicating via sexps, similar to XML.
-\item Possibility of very powerful editing tools.
-\item Possibility of a customizable syntax.
-\end{enumerate}
+As programs can be represented by data structures which are accessible to the
+user of the language, an implementation may provide hooks which allow the user
+to add transformation routines.  Such a routine may take a source tree, which
+has been read, but not evaluated, and return such a source tree, which is
+evaluated instead of the invocation of the transformer itself.  In lisp, such
+transformers are called macros.  A macro is a procedure, written in Lisp, which
+operates on Lisp source code.  The result of calling a macro procedure is called
+the expansion of said macro.  Listing \ref{code:increment} is taken from the
+``GNU Emacs Lisp Reference Manual''.\footnote{Note that this definition has some
+  (fixable) problems, which make it unsuitable for production work.}
 
-The first category enables programs which transform and write programs.  This
-can even happen at runtime, if needed, and---depending on the particular Lisp
-implementation---may even be compiled at runtime to provide high speed.
-
-The second category simply means that data may be printed and read back in the
-languages own syntax, without having the need to devise an own syntax along with
-a parser.  This also frees the programmer from having to learn another language.
-
-The third category is---for the most part---beyond the scope of this thesis,
-although the customizability of the languages syntax does pose a problem for
-such tools.  The gist of these tools is that they can view the source code in a
-similar fashion as the reader does: as a tree of expressions.  Such tools
-attempt to disallow and thus prevent the user from making any changes to the
-source, which would result in an incorrect tree.  This does not mean that the
-source will always be free of errors: function calls may still have too many or
-too few arguments, functions or variables may be undefined.  Yet it is not
-possible to have too many opening or closing parens.
-
-These tools offer tremendous editing power, as they allow the programmer to
-perform operations on a tree.  Two examples of such tools for Emacs are
-paredit\cite{paredit} and lispy\cite{lispy}.  Both these tools are for Emacs and
-both are primarily directed at \el{}.  Yet because of the simplicity and
-(syntactic) similarity of Lisps, both tools can also be used for other Lisps
-like \cl{}, albeit with some restrictions and annoyances.\todo{add a reference
-  to the appropriate section, should I opt to add one.}
-
-The fourth category it the subject of this thesis.  Before discussing how an
-extensible reader works, it is necessary to first understand what a reader does,
-whether it is extensible or not.
-
-\subsection{The reader}
-\label{subsec:reader}
-
-The reader is a part of a Lisp system.  As outlined before, a string of
-characters (source code) is transformed into an AST in any language.  In Lisp,
-the syntactic layer is very thin, which makes the structure of the resulting AST
-apparent in the source code, as no special constructs are needed for loops,
-function definitions, types or the like.
-
-\subsection{Print syntax}
-\label{subsec:print-syntax}
-
-The printer is a part of a Lisp system, which works in tandem with the reader.
-While a reader converts a textual representation into an object, the printer
-converts an object into a textual representation.
-
-As Lisp systems tend to be highly interactive, most lisps provide a means to
-print values to a stream.  What Lisp does is slightly different to what many
-other languages offer, as Lisp can often print back values in a way which are
-valid input syntax.  How a data type is printed depends on the Lisp dialect.
-Also not every dialect can print every data type.  Common Lisp by default cannot
-print hash tables, and hardly any lisp has a meaningful printed representation
-for functions---\el{} being an exception here.
-
-Lists are among the types which have not only meaningful print syntax, but also
-one, which is compatible with its read syntax.  This means that a list, as shown
-above, looks the same when printed, as it did in the source code---with minor
-exceptions, which have to do with evaluation.  The details of reading and
-evaluation are discussed later\todo{add ref}.  For now it is sufficient to say,
-that reading the expression 
-
-\begin{lstlisting}[style=lispinline]
-  (+ a (* b c))
+\begin{lstlisting}[style=lispcode,caption={Increment as a
+      macro.},label={code:increment}]
+  (defmacro inc (var)
+        (list 'setq var (list '1+ var)))
 \end{lstlisting}
 
-results in a Lisp object.  When this object is printed back, it looks (almost)
-exactly the same\footnote{A few things, such as comments and indentation are
-  lost, but otherwise it looks the same.}.  In Emacs, this can easily be tried
-out: In the *scratch* buffer, put the following expression: \textbf{(read "(+ a
-  (* b c))")}, place the cursor on the end of the expression and press C-c C-e.
-The very same text should appear on the status line.  The same can be done in
-almost any lisp environment in some form.  
+This macro is called with \texttt{(inc x)} where \sym{x} is an already existing
+variable.  Inside the macro procedure \sym{val} is \emph{not} bound to the value
+which \sym{x} will hold at runtime, but with the \emph{symbol} \sym{x}.  This
+makes it possible to perform macro expansion at runtime.  The procedure returns
+a list, which is evaluated at runtime.  As the first element of this list is the
+symbol \sym{setq}, it sets a variable to a value.  The code which produces the
+expansion, as well the expansion itself may be arbitrarily complex.  There is a
+lot more to write about how to use macros in practice.  The ``GNU Emacs Lisp
+Reference Manual'' has a section devoted to macros in \el, and Paul Grahams book
+``On Lisp'' \cite{on-lisp} features an excellent chapter on macros in \cl{}.
 
-This allows users to print data to a file or network and read them back in
-again.  This is what Paul Graham meant when he claimed that programs
-communicating via sexps was an idea recently reinvented by XML.
+A more sophisticated macro can be found in the source code to this thesis (see
+listing \ref{code:make-accessors}, which generates getters and setters for a
+class).  The arguments to the macro are a symbol which denotes the class for
+which accessors shall be created, and an optional second symbol which denotes a
+prefix for all accessors.
 
-\begin{comment}
-  The reason why lisp code has so many parentheses, is that parentheses denote a
-  list in Lisp.  Expressions in general, save the most trivial ones, are
-  represented of lists containing other lists and symbols.\footnote{Plus of
-    course other entities such as numbers, yet these are not relevant to this
-    discussion.}
-\end{comment}
-% \section{Introduction}
-% \label{sec:introduction}
+\begin{lstlisting}[style=lispcode,caption={Create accessors for all data members
+  of a given class.},label={code:make-accessors}]
+(defmacro el-reader//make-public-accessors (class &optional prefix)
+    (cons 'progn
+          (seq-map
+           (lambda (e)
+             `(progn
+                (defun ,(intern (s-concat (if prefix (symbol-name prefix)
+                                            "")
+                                          (symbol-name e)))
+                    (obj)
+                  ,(s-concat "Extract the element " (symbol-name e)
+                             " from OBJ. ")
+                  (slot-value obj ',e))
+                (cl-defmethod (setf ,(intern (s-concat
+                                              (if prefix
+                                                  (symbol-name prefix)
+                                                "")
+                                              (symbol-name e))))
+                    (new-elt (obj el-reader/readtable))
+                  (setf (slot-value obj ',e) new-elt))))
+           (seq-map #'eieio-slot-descriptor-name
+                    (eieio-class-slots class)))))
+\end{lstlisting}
 
-% This thesis discusses the design, implementation, and idiosyncrasies of \elr{},
-% an extensible reader for \el{}.  An overview over the history of Lisp, Emacs and
-% \el{} are given, as well as an introduction to 
+For every data member \sym{memb}, prefix \sym{prefix/} in the class
+\sym{klass}, the code in listing \ref{code:data-member} has to be generated.
 
-% \section{Introduction}
-% \label{sec:introduction}
-% In this thesis, a \cl{} like extensible reader for \el{} is discussed.  Before
-% discussing the reader itself, it is important to discuss what a reader does,
-% what it can do, and how the built-in reader in \emacs{} differs from the
-% extensible one discussed in this thesis, or the \cl{} reader, from which this
-% reader draws its inspiration.
+\begin{lstlisting}[style=lispcode,caption={Getter and Setter for a member called
+  \sym{member}.},label={code:data-member}]
+(defun prefix/memb (obj)
+  "Extract the element invalid-chars from OBJ. "
+  (slot-value obj (quote invalid-chars)))
+(cl-defmethod (setf prefix/memb)
+    (new-elt (obj klass))
+  (setf (slot-value obj (quote memb)) new-elt))
+\end{lstlisting}
 
-% For this purpose, Lisps syntax, and how it is different from almost all other
-% languages, is discussed.
+This code inspects the slots (i.e. member variables) of the class given in the
+first argument with the function \fun{eieio-class-slots} which returns a list of
+slot descriptors.  The function \fun{eieio-slot-descriptor-name} in turn returns
+the name of the given slot, which is done for each slot (with \fun{seq-map}).
+For each slot name a getter (\fun{defun}) and setter (\fun{cl-defmethod}) is
+created.  Note that the macro itself does not create these functions.  The macro
+returns code which---when run---creates said functions.  The alternative to this
+macro would have been to write getters and setters for every data member in a
+class manually.\footnote{For this program, the macro was used only once.  The
+  expansion is almost 80 lines long, if properly formatted.}  This is not only a
+menial task not worthy of a self respecting programmer, but also error prone and
+highly unmaintainable.  If for instance the desired prefix changes, every getter
+and every setter has to be inspected and changed.
 
-% It is also shown what can be done with such an extensible reader, and why one
-% might want to use such extensions.
+\subsection{Communication via sexps}
+\label{subsec:sexp-communication}
 
-% The application of such an extensible reader allows the creation of new
-% syntactic constructs, which may be embedded into the language.  Thus, it enables
-% the user to not only create a DSL, but also to embed it into a greater program,
-% without making the new constructs opaque by putting them into strings, which
-% must be parsed at runtime.
+When a given program needs to save or read data from a file, a stream, or some
+other medium, some form of structure is needed.  The simplest case is a binary
+format, yet these schemes often suffer from lack of extensibility and
+debugability.  If a text based scheme is called for, some sort of syntax is
+needed.  In the \unix{} culture plaintext files with assignments using the
+\texttt{=} is and was often used.  Programs on \windows{} often used INI files.
+Both cultures seem to tend towards XML.  
 
+XML and sexps are quite similar.  Both describe a tree shaped structure, without
+specifying what labels are permitted.  XML seems to focus on cases where there
+is a lot of text and little markup (hence making it quite suitable for the web),
+while sexps are well suited for cases with lots of markup and little text.  One
+could say that sexps focus more on symbols, while XML focuses on strings.
 
-% In this thesis, the author wishes to first convey how Lisps syntax is different
-% from other languages and why this is relevant to the discussion of extending the
-% syntax.  Secondly what is meant by an extensible syntax or read macro, and why
-% they might be relevant.  Also, depending on the background of the reader of this
-% text, one might confuse such syntactic extensions with Domain Specific
-% Languages—or DSLs for short.
+While it is possible to describe both a document and a program with XML or with
+sexps, it quickly becomes ugly to describe a document with sexps because text
+must be escaped.  Likewise, describing programs in XML is very verbose and ugly,
+as can be seen by looking at an ant file.
 
-% While there is some overlap between the two, DSLs are not necessarily embedded,
-% but instead may come with a separate compiler and/or interpreter.  An extensible
-% syntax, as it is presented here, allows to change the syntax on-the-fly,
-% possibly without altering any present syntactic constructs, thus allowing new
-% constructs in an existing programming language.
+Both XML and sexps serve the purpose of providing a linear syntax for data
+objects.  A syntax which may not only be read by a program, but also which may
+be written, as data objects may be printed in XML or sexps notation.
 
-\section{Terminology}
-\label{sec:terminology}
+The obvious benefit of using sexps to share data between processes for a Lisp
+programmer is rather obvious: the syntax is the same as the language itself and
+both readers and printers are available by definition.  At least in \cl{} both
+are customizable, which allows for new syntax for new data types.  Often new
+syntax is not needed, as printing can produce an expression which can be
+transformed at runtime.  A hash table might be printed like this:
+\begin{lstlisting}[style=lispinline]
+(hash-table size 65 test eql rehash-size 1.5
+            rehash-threshold 0.8
+            data (:foo "FOO!" :bar "BAR!"))
+\end{lstlisting}
 
-To get things out of the way, we first define some terms:
-\begin{description}
-\item[Terminating macro character] A character which has been marked as a
-  terminating macro character must have a function attached to it, even if this
-  function only signals an error when called.  Such characters also terminate
-  any token which occurs before them.  If, for instance, `(' is such a
-  character, the character sequence ``bar(...'' will stop reading between the
-  `r' and `(', resulting in the symbol \sym{bar}.
+In such an example the mere reading of an expression will not yield a hash
+table.  Yet interpreting such a structure gives enough details on how to
+construct the table in memory, similar as would be done using XML.
 
-  If such a character is encountered as the first char to \fun{read}, its
-  associated function is called.
-\item[Non-terminating macro character] These characters work in a similar
-  fashion to Terminating macro characters, yet do not terminate a token
-  preceding them.  Also their associated function is not called in such a
-  situation.
-\item [Read macro] A read macro is a pair of a (non-)terminating macro character
-  and a function, which is associated with it.  The two together create the
-  possibility to define new syntactic constructs.
-\item[List] In Lisp parlance, a list almost always means a singly linked list,
-  i.e. a collection which can grow and shrink at the front by one element in
-  constant time.
-\end{description}
+\subsection{Editing Tools}
+\label{subsec:edit-tools}
+
+While editing any kind of language, one may encounter intermediate states which
+are invalid.  While typing ``<a href=http://example.com>link</a>'' in an XML
+document, the person typing this will break the structure of the file in several
+ways:  ``<'' alone is not valid in XML.  ``<a'' too, is invalid.  The same
+problem exists for sexps: ``(a ((href . "http://example.com")) "link")'' is an
+sexps which has roughly the same structure as the previous XML example.  Here,
+unbalanced parentheses cause the text to become invalid syntax, i.e. no tree can
+be constructed from it.
+
+For \emacs{} there are at least two tools which address this problem:
+paredit\cite{paredit} and lispy\cite{lispy}.  Both tools provide alternative
+editing commands which ensure a valid tree:  if an open paren is inserted, a
+closing paren is also inserted.  A list may be expanded to include the next
+element, or eject the last element from the list (thus always keeping the tree
+intact).  These tools also offer commands which raise a whole expression (of
+arbitrary size) up one level in a tree, deleting one level.  An example may be
+used to illustrate:
+
+\begin{lstlisting}[style=lispinline]
+(if (some-predicate arg1 arg2 and some more really
+                    complex code!)
+    simple-value)
+\end{lstlisting}
+
+Given this code, a programmer might discover that the whole if expression is not
+needed, and that \sym{simple-value} should always be used.  Given very few
+commands, both paredit and lispy can \emph{raise} the token \sym{simple-value}
+to produce a new tree:
+
+\begin{lstlisting}[style=lispinline]
+simple-value
+\end{lstlisting}
+
+Note that this is done (somewhat) atomically: at no point is there an opening or
+closing paren which distorts the syntax tree.
+
+While such tools may not be impossible for other languages, sexps (and XML
+probably too, yet the author is not aware of such tools for XML) make this much
+easier than other languages.\footnote{To show how ``simple'' this can be, one
+  can simply take a look at the length of the source code of such tools: the
+  lispy version I use at the time of writing consists of 12 files for several
+  languages, and less than 10,000 lines of \el{} code (including comments etc).
+  While this is still quite a lot, it probably would be a lot more for languages
+  with more ``traditional'' syntax, let alone for languages with undecidable
+  grammars like C++.}
+
+\subsection{Customizable Syntax}
+\label{subsec:custom-syntax}
+
+As Lisp syntax is merely syntax for an AST, i.e. data, this syntax can be
+customized to include new data types, or to redefine existing syntactic
+constructs.  It is important to note that this is not true of Lisps in general,
+only that it is possible for a Lisp to exhibit this kind of behavior.  \cl{}
+features a customizable reader \el{} does not, which is why this thesis
+addresses the issue for \emacs{}.
+
+Not many users of \cl{} seem to use this set of features, as free and good
+introductory material on the topic is quite lacking on the web, although
+Graham’s On Lisp \cite{on-lisp} does feature a short chapter on read
+macros.\todo{Add a ref to the section which details the lisp reader.}
 
 \section{Motivation}
 \label{sec:motivation}
@@ -566,7 +616,7 @@ syntax\footnote{\el{} has read (and even print) syntax for hash tables, yet is
 users may create such a syntax themselves, yet \el{} users never had this
 possibility.
 
-In the absense of read macros, one possible shortcut is to simply define a
+In the absence of read macros, one possible shortcut is to simply define a
 function to do so; consider the function \fun{ht} in listing \ref{code:cl-ht}
 from the source code of this thesis, ported to \cl{}.
 
@@ -692,11 +742,11 @@ provides no packaging facilities.\footnote{Should Emacs change the internal
 A more sophisticated use case might be to provide read syntax for regular
 expressions---regexps for short.  In \el{} regexps are notoriously ugly to enter
 and read, because they are opaque strings, which are passed to a function, which
-parses it at runtime.  This means that many constructs must be escaped multiple
-times, which makes the strings difficult to read and write.  A particular
-notorious offender is the regular expression which matches a single backslash;
-in Clojure one may write \texttt{\#"\textbackslash\textbackslash"}, \el{} users
-are forced to write the much more cumbersome
+parses and compiles them at runtime.  This means that many constructs must be
+escaped multiple times, which makes the strings difficult to read and write.  A
+particular notorious offender is the regular expression which matches a single
+backslash; in Clojure one may write \texttt{\#"\textbackslash\textbackslash"},
+\el{} users are forced to write the much more cumbersome
 \texttt{"\textbackslash\textbackslash\textbackslash\textbackslash"}.  Here again
 Clojure shows a nice way to handle the issue: by providing syntax for them.
 
@@ -705,8 +755,7 @@ of the box, it provides no way for users to add their own constructs.
 
 Finally, it is also possible to define non-standard evaluation semantics, as the
 code for read macros is run at read time.  This means that calculations may be
-performed at read time, which---when using ahead of time
-compilation---translates to compile-time.
+performed at read time, which---for most code---is effectively compile-time.
 
 An example for this is something similar to rubys \texttt{\%w} construct.  It
 reads a list of tokens, converts them to strings and makes an array out of
@@ -714,11 +763,13 @@ them.
 
 \begin{lstlisting}[style=rubyinline]
 %w(foo bar spam and eggs) 
-# => ["foo", "bar", "spam", "and", "eggs"]
+=> ["foo", "bar", "spam", "and", "eggs"]
 \end{lstlisting}
+\todo{Possibly fix the code box.}
 
-While ruby is very flexible about the delimiters, one might define
-\texttt{\#w(...)} in Lisp as in listing \ref{code:elr-ruby-words}
+If one is willing to ignore that ruby is very flexible about the delimiters, one
+might define something similar to \texttt{\#w(...)} in Lisp as in listing
+\ref{code:elr-ruby-words}.
 
 \begin{lstlisting}[style=lispcode,caption={A read macro for rubys word
   syntax.}, label={code:elr-ruby-words}]
@@ -760,31 +811,501 @@ Here is how it is used:
 #w[foo bar spam eggs] => ["foo" "bar" "spam" "eggs"]
 \end{lstlisting}
 
-\section{Lisp Basics}
-\label{subsec:lisp-basics}
+\section{Replacing Emacs’ built-in reader}
+\label{sec:repl-reader}
 
-This section is only intended as a short recap of what Lisp syntax is, and how
-it relates to the reader.  For more details, a Lisp textbook is more
-appropriate.  A good reference for \el{} is found at \cite{elisp-reference}.
-The chapters 
+When contemplating the replacement of such a critical and internal part of the
+implementation of a programming language, one must find a way to do so.  The
+obvious way is to replace the C code in \emacs{} itself.  The obvious advantage
+to this approach is speed and good integration.  The drawback is that
+programming in C is rather slow going, and that C and \el{} have very different
+data and execution models.  Another problem is that this makes distribution more
+cumbersome.  The changes needed for this approach really are modifications of
+existing code, not mere additions.  Applying these changes would require the
+user to patch and recompile Emacs.  On the other hand, if these changes got
+included into \emacs by its maintainers, distribution would be automatic.
 
-Lisp syntax never directly describes control flow, function definitions, or
-other actions, but merely data.  If the described data consists of lists and
-symbols, it will later on be treated as code, which can be compiled and
-executed.\todo{Possibly show some Lisp examples.}
+Another possibility is to implement the reader in \el.  This not only has the
+advantage of easing development, by virtue of \el being a more powerful language
+than C, and not having to switch between different data and execution models.
+It also makes it possible to distribute the resulting reader in an optional
+package, so every user may independently choose whether or not to use it.
 
-Such data structures can represent code by having a list with an ``action'',
-which may be a special form, a macro or a function, as its first element.  Any
-further elements are arguments to said operator.
+The second approach has one problem: the original reader must be replaced at
+runtime.  This is possible due to the dynamic nature of \el.  A function may not
+only be replaced wholesale, as is possible in many languages (such as python),
+but also to ``advise'' functions.  This is a feature which has been present in
+many Lisp dialects in the past, and has recently seen some popularity under the
+name of ``Aspect oriented programming''
 
-As an example, here is some code which performs a variable binding with
-\fun{let} (which is a special form), an assignment with \fun{setf} (a macro) and
-a function call to \fun{message}.
+\emacs{} offers many different ways to add code to a function, all documented in
+the manual in section 12.11 ``Advising Emacs Lisp
+Functions''\cite{elisp-reference}.  In order to replace the reader (which
+consists of only one function: \fun{read}) it is sufficient to place
+\sym{:around} advice onto the function in question.  This has the effect that
+all calls to \fun{read} will be redirected to a different, user supplied
+function with all arguments, plus the original function as an extra argument.
+
+This makes it possible to check whether \elr{} shall be used or not, and
+redirect to the original function instead.  Also, it makes it possible for
+\elr{} to reuse the original reader, where appropriate\footnote{Note that this
+  was done only for performance reasons.}.
+
+Given this possibility, replacing the built-in reader is a matter of a few lines
+of \el{} code, as can be seen in listing \ref{code:replace-reader}.
+
+\begin{lstlisting}[style=lispcode,caption={Replacing the built-in
+    reader},label={code:replace-reader}]
+(define-advice read (:around (oldfun &optional stream)
+                             el-reader//replace-read)
+  (if (and use-el-reader (not el-reader-bytecode))
+      (el-reader/read stream)
+    (funcall oldfun stream)))
+\end{lstlisting}
+
+\subsection{Compatibility}
+\label{subsec:compat}
+
+When replacing such a critical part of a language, it is important to maintain
+compatibility.  For this, several criteria must be met:
+
+\begin{enumerate}
+\item Previously accepted code must be accepted by the new system.
+\item Previously accepted code must have the same meaning in the new system.
+\end{enumerate}
+
+Both criteria may seem obvious, yet they apply both to syntax and to a function
+call, namely to \Read{}.
+
+To achieve this, it is necessary to take a look at the signatures of \Read{}
+both in \el{} as in \cl{}, as \elr{} takes a lot of inspiration from \cl{}.  In
+\el{} read takes 0 or 1 arguments, where stream is either:
+\begin{description}
+\item[nil:] the value of \sym{standard-input} (defaults to \sym{t}) is used.
+\item[a buffer:] begin at point and advance it.
+\item[a marker:] read from where it points and advance it.
+\item[a function:] called without arguments to retrieve a character, called with
+  one argument to unread a char.
+\item[a string:] starts at the beginning, does not change its argument
+\item[\sym{t}:] read a line of text either from the minibuffer (very Emacs
+  specific), or from standard input, if used in batch mode
+\end{description}
 
 \begin{lstlisting}[style=lispinline]
-(let ((var 5))
-  (setf var "Hello")
-  (message "%s" var))
+(read &optional STREAM)
+\end{lstlisting}
+
+In \cl{} \Read{} as the following signature:
+
+\begin{lstlisting}[style=lispinline]
+(read &optional (stream *standard-input*) (eof-error-p t)
+      (eof-value nil) (recursive-p nil))
+\end{lstlisting}
+
+As in \el{} stream may be called without arguments, yet if exactly one is given,
+it refers to a stream.  All extra arguments are also optional, and their default
+behaviour is---as far as it applies to \emacs{}, identical.
+
+The signature chosen for \elr{} is a little more complex, yet is fully
+compatible with \emacs{}’ \Read{} and reasonably compatible with \cl{}:
+
+\begin{lstlisting}[style=lispinline]
+(el-reader/read &optional input-stream (eof-error-p t)
+                eof-value recursive-p keys)
+\end{lstlisting}
+
+The last argument needs some explaining.  Unfortunately, \el{} lacks several
+features which are present in \cl{}, hence the authors of \cl{}’s read took for
+granted.  Among these features is the possibility to have a function return
+multiple values without forcing the caller to know or care about the fact.  In
+\cl{} the first value returned by a function is called the primary value.  This
+value can be used as if the called function merely returned one value.  Should
+any other values be of interest, they must be explicitly bound by
+\sym{multiple-value-bind} or similar operators.  The multiple values facility of
+\cl{} also allows for no values to be present.  In such a case, the primary
+value (if bound) is \sym{nil}.  As \el{} does not support this mechanism, \elr{}
+passes an additional argument named \sym{keys} to switch between returning
+exactly one value, and returning a (possibly empty) list of values.  This is
+done, as it is possible for a read macro to return no value.  This is done for
+comments.  For this reason, read macros must always wrap their return value in
+\fun{list}, or \fun{cl-values} (which is an alias for \fun{list}).
+
+Note that the keys argument never has to be given by the user.  It is given only
+in one single place, which is in \fun{el-reader/read} itself, i.e. in a
+recursive call.  Nevertheless, the user must always return a list of values in
+read macros, which is a shame, as it departs from the way it is done in \cl{}.
+
+There are other features which are present in \cl{} but not in \el{}, yet none
+of them are so critical (and difficult to retrofit) as multiple values.  Some
+other features can be emulated at various degrees of awkwardness, such as having
+non-nil default values for optional arguments.  These can be used with
+\fun{cl-defun}, and have been used in the code for \elr{}.
+
+Other features have only started to appear in \emacsv{25}, such as multiple
+dispatch, which is the main reason \elr{} doesn’t work on \emacsv{24.5}.
+
+% \begin{enumerate}
+% \item Possibility of higher order programs, i.e. macros.
+% \item Possibility of communicating via sexps, similar to XML.
+% \item Possibility of very powerful editing tools.
+% \item Possibility of a customizable syntax.
+% \end{enumerate}
+
+% The first category enables programs which transform and write programs.  This
+% can even happen at runtime, if needed, and---depending on the particular Lisp
+% implementation---may even be compiled at runtime to provide high speed.
+
+% The second category simply means that data may be printed and read back in the
+% languages own syntax, without having the need to devise an own syntax along with
+% a parser.  This also frees the programmer from having to learn another language.
+
+% The third category is---for the most part---beyond the scope of this thesis,
+% although the customizability of the languages syntax does pose a problem for
+% such tools.  The idea behind these tools is that they can view the source code
+% in a similar fashion as the reader does: as a tree of expressions.  Such tools
+% attempt to disallow and thus prevent the user from making any changes to the
+% source which would result in an incorrect tree.  This does not mean that the
+% source will always be free of errors: function calls may still have too many or
+% too few arguments, functions or variables may be undefined.  Yet it is not
+% possible to have too many opening or closing parens.
+
+% These tools offer tremendous editing power, as they allow the programmer to
+% perform operations on a tree.  Two examples of such tools I am aware of are
+% paredit\cite{paredit} and lispy\cite{lispy}.  Both these tools are for Emacs and
+% both are primarily directed at \el{}.  Yet because of the simplicity and
+% (syntactic) similarity of Lisps, both tools can also be used for other Lisps
+% like \cl{}, albeit with some restrictions and annoyances.\todo{add a reference
+%   to the appropriate section, should I opt to add one.}
+
+% The fourth category is the subject of this thesis.  Before discussing how an
+% extensible reader works, it is necessary to first understand what a reader does,
+% whether it is extensible or not.  This is discussed in section
+% \ref{sec:reader-printer}.
+
+\section{Reader and Printer}
+\label{sec:reader-printer}
+
+\subsection{Readers vs. Parsers}
+\label{subsec:readers-vs-parsers}
+
+Most texts discussing compilers, interpreters and other language processors
+often use the terms lexer and parser to describe how text is at first processed.
+In the Lisp world, there is another term, often used instead: the reader.
+
+Lisps take the compiler or interpreter further apart than most other languages
+by allowing the user to read/parse an expression at runtime and to provide hooks
+to the compiler in the form of macros.  Even Lisps which allow for read macros
+like \cl{} lump the lexer and parser together and name it the reader.  This is
+because the Lisp reader and its macros operate on single characters, and return
+anything from a single token (a symbol) to a whole tree.  The details of this
+are discussed in section \ref{subsec:read-algo}.
+
+\subsection{Overview of the reader}
+\label{subsec:reader}
+
+The Lisp reader is responsible for transforming source code into Lisp objects.
+In \el{} the rules for doing so are fixed.  The reader is implemented in C,
+mostly by large switch statements, which look at the current character.
+Normally parsers---and therefore readers---can perform their work by reading one
+char, and being able to put one character back.  The reader for \el{} normally
+does this too, yet deviates from this procedure at least once\footnote{This is
+  done at least in the implementation of a rather obscure macro character: \#@.
+  This char is used to skip over bytes in the stream.  The byte compiler places
+  such characters into its output in order to skip over docstrings.  The strange
+  behaviour is probably for historic reasons, as wrong input is purposefully
+  accepted in certain situations as \emacs{} used to produce wrong output due to
+  a bug.}.
+
+\subsubsection{A sketch of rules for \emacs’ reader}
+\label{subsubsec:rules-sketch}
+
+The reader API only provides for the possibility to read \emph{one} expression
+from a stream, at the current position: the function \Read{}.  This
+expression can be very complex, because of composite structures like lists.
+When the reader encounters a special char (a macro character) as its first char,
+it follows the rules for such a char.  Should such a char be encountered while
+reading a symbol or number (both are called ``atoms''), it stops in order to
+return the atom read so far\footnote{An example of such behaviour is when
+  reading the expression ``(foo bar)''.  When the reader attempts to read the
+  second symbol it encounters a closing paren after the letter `r'.  At this
+  point, the reader puts the read closing paren back onto the stream.}.  Only
+when the reader is called again, it sees the macro char again.
+
+
+
+When encountering a macro char as the first char, the according procedure is
+called.  Obviously the opening parenthesis must be such a char: it triggers the
+creation of a list.  It recursively calls \Read{} until it sees a closing
+parenthesis.  This means that recursive calls to \Read{} may also see an open
+paren as their respective first char, thus allowing nested calls to macro char
+functions.
+
+Note that \emacs{}’ reader does not actually have a strict notion of macro
+characters and the like.  This is because \emacs{}’ reader does not have an
+extensible reader; the reader itself knows all rules and how to handle macro
+characters.
+
+Most syntactic constructs simply start with a triggering char and have somewhat
+straightforward rules regarding the construction of an object from characters.
+The aforementioned list is one example, the vector, written as [a b c] is
+another: here the tokens read are not evaluated\footnote{This means that reading
+``[(list 1 2)]'' does not result in a vector with a single element which in turn
+is a list containing the numbers 1 and 2, but a vector with the list consisting
+of the symbol \sym{list} and the numbers 1 and 2 as its sole element.}.  Quoting
+is also very simple: the single-quote character triggers a macro, which in turn
+reads exactly one expression and returns a two element list: the symbol
+\sym{quote} as the first element, and the read expression as the second element.
+
+Other forms are more intricate and require non-trivial solutions, most notably
+dotted pair syntax.  In Lisp, a cons cell (which is an ordered pair) may be
+constructed with the function \fun{cons}, with list syntax or with dotted pair
+notation.  The function \fun{cons} takes two arguments and returns a cell
+consisting of these two objects.  List notation with parentheses constructs a
+series of cells which point to their successor in the second field.  This means
+that the second element must be another cons cell, or \nil{}, which designated the
+empty list.  To construct a cons which does \emph{not} point to another cons or
+\nil{} at read time, one may employ dotted pair syntax.  This constuct is like a
+list, yet between the last and second to last elements a sole dot is inserted,
+like so:
+
+\begin{lstlisting}[style=lispinline]
+  (foo bar spam . eggs)
+  (spam . eggs)
+\end{lstlisting}
+
+The first example constructs a so called \emph{non-proper} list; such a list
+does not end with a pointer to \nil{}.  It thus produces 3 cons cells.  Without
+the dot, 4 cells would have been produced, in order to have a reference to
+\nil{} at the end.  The second example produces a single cons cell, equivalent
+to calling \texttt{(cons 'spam 'eggs)} at read time.
+
+Note that this read construct is a deviation from a previously introduced one:
+the list.  Also, symbols consisting only of a dot, as used here, are otherwise
+not permitted, neither in \el{} nor \cl{}.  Both \emacs{} and the code used in
+this thesis use a similar strategy to resolve this issue, as is discussed in
+section \todo{Add a ref!}.
+
+% The reader is a part of a Lisp system.  As outlined before, a string of
+% characters (source code) is transformed into an AST in any language.  In Lisp,
+% the syntactic layer is very thin, which makes the structure of the resulting AST
+% apparent in the source code, as no special constructs are needed for loops,
+% function definitions, types or the like.
+
+\subsection{Overview of print syntax}
+\label{subsec:print-syntax}
+
+The printer is a part of a Lisp system, which works in tandem with the reader.
+While a reader converts a textual representation into an object, the printer
+converts an object into a textual representation.  It can be seen as the inverse
+to the reader, yet while being a nice metaphor, it does not hold for all inputs.
+
+As Lisp systems tend to be highly interactive, most lisps provide a means to
+print values to a stream.  What Lisp does is slightly different to what many
+other languages offer, as Lisp can often print back values in a way which are
+valid input syntax.  How a data type is printed depends on the Lisp dialect.
+Also not every dialect can print every data type.  Common Lisp by default cannot
+print hash tables, and hardly any lisp has a meaningful printed representation
+for functions---\el{} being an exception here.\footnote{\el{} can print
+  interpreted functions as lists of symbols, and byte-compiled functions as
+  bytevectors.  These may not be readable by a human, and barely compatible with
+  other \emacs{} versions, yet is still more than most other dialects and
+  implementations have to offer.}
+
+Lists are among the types which have not only meaningful print syntax, but also
+one which is compatible with its read syntax.  This means that a list, as shown
+above, looks the same when printed, as it did in the source code---with minor
+exceptions, which have to do with evaluation.  Also, formatting and comments are
+lost.
+
+As a fully fledged and extensible printer is a topic in its own right, further
+details are beyond the scope of this thesis.
+
+% \begin{lstlisting}[style=lispinline]
+%   (+ a (* b c))
+% \end{lstlisting}
+
+% results in a Lisp object.  When this object is printed back, it looks (almost)
+% exactly the same\footnote{A few things, such as comments and indentation are
+%   lost, but otherwise it looks the same.}.  In Emacs, this can easily be tried
+% out: In the *scratch* buffer, put the following expression: \textbf{(read "(+ a
+%   (* b c))")}, place the cursor on the end of the expression and press C-c C-e.
+% The very same text should appear on the status line.  The same can be done in
+% almost any lisp environment in some form.  
+
+% This allows users to print data to a file or network and read them back in
+% again.  This is what Paul Graham meant when he claimed that programs
+% communicating via sexps was an idea recently reinvented by XML.
+
+\begin{comment}
+  The reason why lisp code has so many parentheses, is that parentheses denote a
+  list in Lisp.  Expressions in general, save the most trivial ones, are
+  represented of lists containing other lists and symbols.\footnote{Plus of
+    course other entities such as numbers, yet these are not relevant to this
+    discussion.}
+\end{comment}
+% \section{Introduction}
+% \label{sec:introduction}
+
+% This thesis discusses the design, implementation, and idiosyncrasies of \elr{},
+% an extensible reader for \el{}.  An overview over the history of Lisp, Emacs and
+% \el{} are given, as well as an introduction to 
+
+% \section{Introduction}
+% \label{sec:introduction}
+% In this thesis, a \cl{} like extensible reader for \el{} is discussed.  Before
+% discussing the reader itself, it is important to discuss what a reader does,
+% what it can do, and how the built-in reader in \emacs{} differs from the
+% extensible one discussed in this thesis, or the \cl{} reader, from which this
+% reader draws its inspiration.
+
+% For this purpose, Lisps syntax, and how it is different from almost all other
+% languages, is discussed.
+
+% It is also shown what can be done with such an extensible reader, and why one
+% might want to use such extensions.
+
+% The application of such an extensible reader allows the creation of new
+% syntactic constructs, which may be embedded into the language.  Thus, it enables
+% the user to not only create a DSL, but also to embed it into a greater program,
+% without making the new constructs opaque by putting them into strings, which
+% must be parsed at runtime.
+
+
+% In this thesis, the author wishes to first convey how Lisps syntax is different
+% from other languages and why this is relevant to the discussion of extending the
+% syntax.  Secondly what is meant by an extensible syntax or read macro, and why
+% they might be relevant.  Also, depending on the background of the reader of this
+% text, one might confuse such syntactic extensions with Domain Specific
+% Languages—or DSLs for short.
+
+% While there is some overlap between the two, DSLs are not necessarily embedded,
+% but instead may come with a separate compiler and/or interpreter.  An extensible
+% syntax, as it is presented here, allows to change the syntax on-the-fly,
+% possibly without altering any present syntactic constructs, thus allowing new
+% constructs in an existing programming language.
+
+\subsection{Reader algorithm}
+\label{subsec:read-algo}
+
+As it is the goal of this thesis to provide an extensible reader in spirit and
+style of \cl{} it is imporant to highlight the rules of \cl{}’s reader and how
+the \elr{} deviates from these rules.
+
+The algorithm which \cl{} adheres to is detailed in the HyperSpec in section
+2.2\cite{hyperspec}.
+
+It is worth noting that the in \cl{} the reader revolves around a central opaque
+data structure: the readtable.  Every customization which is made, is made to a
+readtable.  Some functions take a readtable as an optional argument while
+defaulting to the current readtable (stored in the special variable
+\sym{*readtable*}), or simply always using the default table.
+
+The HyperSpec, which is often regarded as a free and more friendly alternative
+to the \cl{} standard, defines some terminology which is quite useful:
+
+\begin{description}
+\item[Terminating macro character] A character which has been marked as a
+  terminating macro character must have a function attached to it, even if this
+  function only signals an error when called.  Such characters also terminate
+  any token which occurs before them.  If, for instance, `(' is such a
+  character, the character sequence ``bar(...'' will stop reading between the
+  `r' and `(', resulting in the symbol \sym{bar}.
+
+  If such a character is encountered as the first char to \Read{}, its
+  associated function is called.
+\item[Non-terminating macro character] These characters work in a similar
+  fashion to Terminating macro characters, yet do not terminate a token
+  preceding them.  As with a terminating macro char, the associated function is
+  called if it is the first character encountered.
+\item [Read macro] A read macro is a pair of a (non-)terminating macro character
+  and a function, which is associated with it.  The two together create the
+  possibility to define new syntactic constructs.
+\item[Syntax Type] At any given time every character has exactly one syntax
+  type.  Note that different occurrences of the same character can have
+  different syntax types.  It is thus not sufficient to provide a relation
+  between the character value and a syntax type.  See paragraph
+  \ref{subsubsec:syntax-type} for more details.
+\end{description}
+
+\subsubsection{Character Syntax Types}
+\label{subsubsec:syntax-type}
+
+The six following Syntax Types for characters exist.  Note that while each
+character always has exactly one type, this type may change over time, and does
+this per character instance.  I.e not every `A' has the same syntax type.
+
+\begin{description}
+\item[constituent] Constituent characters are characters which may be part of a
+  symbol or (potential) number.
+\item[macro character] Macro characters come in two flavours: terminating and
+  non-terminating (see also section \ref{subsec:read-algo}).
+\item[single-escape] A single escape character escapes the following character
+  in the stream.  This means that the syntax type of the next char is changed to
+  constituent, no matter what its original type.  It also hat \emph{alphabetic}
+  as its only trait (see section \ref{subsubsec:traits} for details).
+\item[multiple escape] A multiple escape character escapes all following
+  characters until another multiple escape char occurs.  Nested single escape
+  characters are ignored, yet do not reverse escaping.
+\item[whitespace] Characters of this type end the accumulation of a token
+  (i.e. number or symbol).  They are thus used to separate expressions (for
+  instance the elements of a list).
+\item[invalid] Characters which may not be part of a token.  Note that this set
+  may be empty and is in \elr{}.
+\end{description}
+
+\subsubsection{Character Traits}
+\label{subsubsec:traits}
+
+A character which has the syntax type constituent has one or more traits.
+The following traits are available:
+
+\begin{itemize}
+\item alphabetic
+\item digit
+\item package marker (not used by \elr{})
+\item plus sign
+\item minus sign
+\item dot
+\item decimal point
+\item ratio marker
+\item exponent marker
+\item invalid
+\end{itemize}
+
+These traits should be rather self explanatory, with the possible exception of
+\emph{alphabetic}: characters with the trait alphabetic can be considered as
+``not special''; i.e. can be part of a token, but not of a number.  By virtue of
+having the syntax type constituent, no character having any traits can be a
+macro character or escape further characters.  When considering that ``3e5'' is
+a number, yet ``35e'' is a symbol, it becomes clear that the two occurrences of
+the letter `e' can have different traits.  The same holds true for syntax types.
+
+Note that most of these traits are used to construct (potential) numbers.
+
+\begin{comment}
+  \section{Lisp Basics}
+  \label{subsec:lisp-basics}
+
+  This section is only intended as a short recap of what Lisp syntax is, and how
+  it relates to the reader.  For more details, a Lisp textbook is more
+  appropriate.  A good reference for \el{} is found at \cite{elisp-reference}.
+  The chapters
+
+  Lisp syntax never directly describes control flow, function definitions, or
+  other actions, but merely data.  If the described data consists of lists and
+  symbols, it will later on be treated as code, which can be compiled and
+  executed.\todo{Possibly show some Lisp examples.}
+
+  Such data structures can represent code by having a list with an ``action'',
+  which may be a special form, a macro or a function, as its first element.  Any
+  further elements are arguments to said operator.
+
+  As an example, here is some code which performs a variable binding with
+  \fun{let} (which is a special form), an assignment with \fun{setf} (a macro)
+  and a function call to \fun{message}.
+
+\begin{lstlisting}[style=lispinline]
+  (let ((var 5)) (setf var "Hello") (message "%s" var))
 \end{lstlisting}
 
 When Lisp source code is processed, it goes through three distinct stages:
@@ -885,7 +1406,7 @@ such a case the first element is taken to be a function and the other elements
 are its arguments.  Here is the canonical hello world program for \el{}:
 
 \begin{lstlisting}[style=lispinline]
-(print "Hello, world")
+  (print "Hello, world")
 \end{lstlisting}
 
 Here we have a list of two elements.  The first element happens to be a symbol,
@@ -904,7 +1425,7 @@ assign the value 5 to the ``variable'' \sym{x} with a such a low level special
 form, we could write the following:
 
 \begin{lstlisting}[style=lispinline]
-(set (quote x) 5)
+  (set (quote x) 5)
 \end{lstlisting}
 
 The \fun{quote} form around \sym{x} tells the evaluator to \emph{not} evaluate
@@ -924,8 +1445,7 @@ Unsurprisingly, a function is defined by a list form, with a special symbol as
 its first element.  In \el{} this symbol is \fun{defun}.
 
 \begin{lstlisting}[style=lispinline]
-(defun say-hello (text)
-  (print text))
+  (defun say-hello (text) (print text))
 \end{lstlisting}
 
 Note that the third element, although it is a list, is neither evaluated, nor
@@ -949,7 +1469,7 @@ printing might result in this: \footnote{The exact form depends on the dialect.
   If not otherwise stated, is assumed.  is also used extensively.}
 
 \begin{lstlisting}[style=lispinline]
-(foo 3 bar "4")
+  (foo 3 bar "4")
 \end{lstlisting}
 
 This may later be read back with a call to \fun{read}, to retrieve a data
@@ -1020,12 +1540,12 @@ that the author has gained the most familiarity with \el{} and \cl{}.  The two
 are reasonably similar in a number of ways, especially with \el{} growing a lot
 in recent years.  \el{} used to have only dynamic scope, yet gained optional
 lexical scope in version 24.1\cite{Emacs-Lexical},% \footnote{See
-  % \url{https://www.gnu.org/software/emacs/news/NEWS.24.1}}
+% \url{https://www.gnu.org/software/emacs/news/NEWS.24.1}}
 giving \el{} both lexical and dynamic scope, as with \cl{}.  Also, in the next
 version of Emacs, which will probably become version
 25.1\cite{emacs-pretest},% \footnote{See
-  % \url{http://permalink.gmane.org/gmane.emacs.announce/59} for a source tarball.
-  % It contains a file etc/NEWS which details changes}
+% \url{http://permalink.gmane.org/gmane.emacs.announce/59} for a source tarball.
+% It contains a file etc/NEWS which details changes}
 CLOS-style multiple dispatch generic functions have been added, which ease
 development for many scenarios and again are a step towards \cl{}.
 
@@ -1074,7 +1594,7 @@ variable is a readtable which mimics \el{}s default syntax as closely as
 possible.  While this has not been achieved at the moment, it is possible to
 complete the table with more read macros.  The heavy lifting, such as reading
 circular data structures is already present.  Also, the most common constructs
-used in \el{} are present.  
+used in \el{} are present.
 
 The readtable provides the basis on which \elr{} decides how to treat
 characters.  Characters have exactly one syntax type.
@@ -1138,9 +1658,9 @@ which escaping also inhibits.  This aspect of \cl{} was not incorporated into
 
 These chars are similar to single escape chars.  While a single escape only
 escapes the next char, a multiple escape char escapes all chars up to the next
-multiple escape char.  In \cl{} the `|' character is used by default, in
-\elr{} the functionality is present, yet no character has been assigned, as
-most users would not expect the pipe character to behave in such a way.
+multiple escape char.  In \cl{} the `|' character is used by default, in \elr{}
+the functionality is present, yet no character has been assigned, as most users
+would not expect the pipe character to behave in such a way.
 
 \subsubsection{Terminating macro character}
 \label{par:terminating-macro-char}
@@ -1204,11 +1724,12 @@ compatible with the input base.
 characters were only implemented because \cl{} has them.  The only character
 with this trait is the colon.  As Emacs uses so called obarrays to intern its
 symbols, and it is not possible to intern a symbol into more than one array
-%\cite{no-multi-intern}
+% \cite{no-multi-intern}
 , it is not possible to clone \cl{}s packaging mechanism to Emacs.  Hence this
 syntax type is not of particular importance.
 
-\paragraph{Plus sign, minus sign, dot, decimal point, ratio marker and exponent marker}
+\paragraph{Plus sign, minus sign, dot, decimal point, ratio marker and exponent
+  marker}
 \label{par:number-traits}
 
 are used while constructing numbers.
@@ -1218,6 +1739,7 @@ are used while constructing numbers.
 
 Should a character with this trait be encountered, an error is thrown.  So far,
 \elr{} does not specify any characters to be of invalid trait.
+\end{comment}
 
 \section{API overview}
 \label{sec:api-overview}
