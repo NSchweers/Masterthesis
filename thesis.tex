@@ -574,10 +574,11 @@ Users of other Lisp dialects, especially of \cl{}, have enjoyed the possibility
 to modify the syntax they use to write programs for a long time.  This
 possibility provides a huge benefit in the course of evolving a language, as
 well as implementing readers for custom languages.  Macros---which are expanded
-at compile-time---provide a very powerful mechanism for code generation.  These
-allow to control the order of evaluation of forms within the macro, as well as
-the opportunity to transform them, yet sometimes even this kind of power is not
-quite enough, as the macro call must still consist of valid s-expressions.
+at compile-time---provide a very powerful mechanism for code transformation
+(i.e. ASTs to ASTs).  These allow to control the order of evaluation of forms
+within the macro, as well as the opportunity to transform them, yet sometimes
+even this kind of power is not quite enough, as the macro call must still
+consist of valid s-expressions.
 
 A very simple case is the addition of syntax for data structures, since this is
 what the reader is there for anyway: transforming characters into data
@@ -816,40 +817,46 @@ Here is how it is used:
 
 When contemplating the replacement of such a critical and internal part of the
 implementation of a programming language, one must find a way to do so.  The
-obvious way is to replace the C code in \emacs{} itself.  The obvious advantage
-to this approach is speed and good integration.  The drawback is that
+obvious way is to replace the C code within \emacs{} itself.  The obvious
+advantage to this approach is speed and good integration.  The drawback is that
 programming in C is rather slow going, and that C and \el{} have very different
 data and execution models.  Another problem is that this makes distribution more
 cumbersome.  The changes needed for this approach really are modifications of
 existing code, not mere additions.  Applying these changes would require the
 user to patch and recompile Emacs.  On the other hand, if these changes got
-included into \emacs by its maintainers, distribution would be automatic.
+included into \emacs{} by its maintainers, distribution would be automatic.
 
 Another possibility is to implement the reader in \el.  This not only has the
-advantage of easing development, by virtue of \el being a more powerful language
-than C, and not having to switch between different data and execution models.
-It also makes it possible to distribute the resulting reader in an optional
-package, so every user may independently choose whether or not to use it.
+advantage of easing development, by virtue of \el{} being a more powerful
+language than C, and not having to switch between different data and execution
+models.  It also makes it possible to distribute the resulting reader in an
+optional package, so every user may independently choose whether or not to use
+it.
 
 The second approach has one problem: the original reader must be replaced at
 runtime.  This is possible due to the dynamic nature of \el.  A function may not
 only be replaced wholesale, as is possible in many languages (such as python),
-but also to ``advise'' functions.  This is a feature which has been present in
-many Lisp dialects in the past, and has recently seen some popularity under the
-name of ``Aspect oriented programming''
+but can also be ``advised''.  This is a feature which has been present in many
+Lisp dialects in the past, and has recently seen some popularity under the name
+of ``Aspect oriented programming''
 
 \emacs{} offers many different ways to add code to a function, all documented in
 the manual in section 12.11 ``Advising Emacs Lisp
 Functions''\cite{elisp-reference}.  In order to replace the reader (which
-consists of only one function: \fun{read}) it is sufficient to place
-\sym{:around} advice onto the function in question.  This has the effect that
-all calls to \fun{read} will be redirected to a different, user supplied
-function with all arguments, plus the original function as an extra argument.
+consists of only one function: \fun{read} and a few variables) it is sufficient
+to place \sym{:around} advice onto the function in question.  This has the
+effect that all calls to \fun{read} will be redirected to a different, user
+supplied function with all arguments, plus the original function as an extra
+argument.
 
 This makes it possible to check whether \elr{} shall be used or not, and
 redirect to the original function instead.  Also, it makes it possible for
 \elr{} to reuse the original reader, where appropriate\footnote{Note that this
-  was done only for performance reasons.}.
+  was done only for performance reasons.  Also, nested structures can not in
+  general be reused, as the original reader in \emacs{} is not aware of macro
+  chars and the like.  If the code for reading lists had been reused, ``(foo
+  bar)'' would still read correctly, yet ``(foo \{:bar :spam\})'' would fail, as
+  the built-in reader does not know what to do about curly braces.}.
 
 Given this possibility, replacing the built-in reader is a matter of a few lines
 of \el{} code, as can be seen in listing \ref{code:replace-reader}.
@@ -915,25 +922,28 @@ compatible with \emacs{}’ \Read{} and reasonably compatible with \cl{}:
 \end{lstlisting}
 
 The last argument needs some explaining.  Unfortunately, \el{} lacks several
-features which are present in \cl{}, hence the authors of \cl{}’s read took for
-granted.  Among these features is the possibility to have a function return
-multiple values without forcing the caller to know or care about the fact.  In
-\cl{} the first value returned by a function is called the primary value.  This
-value can be used as if the called function merely returned one value.  Should
-any other values be of interest, they must be explicitly bound by
+features which are present in \cl{}, hence the authors of \cl{}’s \Read{} took
+for granted.  Among these features is the possibility to have a function return
+a number of values different than one (i.e. more than one, or even none at all)
+without forcing the caller to know or care about the fact.  In \cl{} the first
+value returned by a function is called the primary value.  This value can be
+used as if the called function merely returned one value.  Should any other
+values be of interest, they must be explicitly bound by
 \sym{multiple-value-bind} or similar operators.  The multiple values facility of
 \cl{} also allows for no values to be present.  In such a case, the primary
-value (if bound) is \sym{nil}.  As \el{} does not support this mechanism, \elr{}
-passes an additional argument named \sym{keys} to switch between returning
-exactly one value, and returning a (possibly empty) list of values.  This is
-done, as it is possible for a read macro to return no value.  This is done for
-comments.  For this reason, read macros must always wrap their return value in
-\fun{list}, or \fun{cl-values} (which is an alias for \fun{list}).
+value (if bound) is \sym{nil}, yet the caller \emph{may} check for the number of
+returned arguments.  As \el{} does not support this mechanism, \elr{} passes an
+additional argument named \sym{keys} to switch between returning exactly one
+value, and returning a (possibly empty) list of values.  This is done, as it is
+possible for a read macro to return no value.  This is done for comments.  For
+this reason, read macros must always wrap their return value in \fun{list}, or
+\fun{cl-values} (which---at the time of writing---is an alias for \fun{list}).
 
 Note that the keys argument never has to be given by the user.  It is given only
 in one single place, which is in \fun{el-reader/read} itself, i.e. in a
-recursive call.  Nevertheless, the user must always return a list of values in
-read macros, which is a shame, as it departs from the way it is done in \cl{}.
+self-recursive call.  Nevertheless, the user must always return a list of values
+in read macros, which is a shame, as it departs from the way it is done in
+\cl{}.
 
 There are other features which are present in \cl{} but not in \el{}, yet none
 of them are so critical (and difficult to retrofit) as multiple values.  Some
@@ -989,16 +999,18 @@ dispatch, which is the main reason \elr{} doesn’t work on \emacsv{24.5}.
 \label{subsec:readers-vs-parsers}
 
 Most texts discussing compilers, interpreters and other language processors
-often use the terms lexer and parser to describe how text is at first processed.
-In the Lisp world, there is another term, often used instead: the reader.
+often use the terms \emph{lexer} and \emph{parser} to describe how text is at
+first processed.  In the Lisp world, there is another term, often used instead:
+the reader.
 
-Lisps take the compiler or interpreter further apart than most other languages
-by allowing the user to read/parse an expression at runtime and to provide hooks
-to the compiler in the form of macros.  Even Lisps which allow for read macros
-like \cl{} lump the lexer and parser together and name it the reader.  This is
-because the Lisp reader and its macros operate on single characters, and return
-anything from a single token (a symbol) to a whole tree.  The details of this
-are discussed in section \ref{subsec:read-algo}.
+Lisps split the compiler or interpreter apart in a different way than most other
+languages by allowing the user to read/parse an expression at runtime and to
+provide hooks to the compiler in the form of macros.  Even Lisps which allow for
+read macros like \cl{} lump the lexer and parser together and name it the reader
+and make it a first-class service to the user.  This is because the Lisp reader
+and its macros operate on single characters, and return anything from a single
+token (a symbol) to a whole tree.  The details of this are discussed in section
+\ref{subsec:read-algo}.
 
 \subsection{Overview of the reader}
 \label{subsec:reader}
@@ -1007,14 +1019,14 @@ The Lisp reader is responsible for transforming source code into Lisp objects.
 In \el{} the rules for doing so are fixed.  The reader is implemented in C,
 mostly by large switch statements, which look at the current character.
 Normally parsers---and therefore readers---can perform their work by reading one
-char, and being able to put one character back.  The reader for \el{} normally
-does this too, yet deviates from this procedure at least once\footnote{This is
-  done at least in the implementation of a rather obscure macro character: \#@.
-  This char is used to skip over bytes in the stream.  The byte compiler places
-  such characters into its output in order to skip over docstrings.  The strange
-  behaviour is probably for historic reasons, as wrong input is purposefully
-  accepted in certain situations as \emacs{} used to produce wrong output due to
-  a bug.}.
+char, and being able to put one character back.  The built-in reader for \el{}
+normally does this too, yet deviates from this procedure at least
+once\footnote{This is done at least in the implementation of a rather obscure
+  macro character: \#@.  This char is used to skip over bytes in the stream.
+  The byte compiler places such characters into its output in order to skip over
+  docstrings.  The strange behaviour is probably for historic reasons, as wrong
+  input is purposefully accepted in certain situations as \emacs{} used to
+  produce wrong output due to a bug.}.
 
 \subsubsection{A sketch of rules for \emacs’ reader}
 \label{subsubsec:rules-sketch}
@@ -1030,8 +1042,6 @@ return the atom read so far\footnote{An example of such behaviour is when
   second symbol it encounters a closing paren after the letter `r'.  At this
   point, the reader puts the read closing paren back onto the stream.}.  Only
 when the reader is called again, it sees the macro char again.
-
-
 
 When encountering a macro char as the first char, the according procedure is
 called.  Obviously the opening parenthesis must be such a char: it triggers the
@@ -1118,7 +1128,9 @@ exceptions, which have to do with evaluation.  Also, formatting and comments are
 lost.
 
 As a fully fledged and extensible printer is a topic in its own right, further
-details are beyond the scope of this thesis.
+details are beyond the scope of this thesis.  An extensible printer for \emacs{}
+would not only bring \el{} a little closer to \cl{}, it would also make \elr{} a
+little more valuable, especially in aiding communication between programs.
 
 % \begin{lstlisting}[style=lispinline]
 %   (+ a (* b c))
@@ -1194,14 +1206,19 @@ the \elr{} deviates from these rules.
 The algorithm which \cl{} adheres to is detailed in the HyperSpec in section
 2.2\cite{hyperspec}.
 
-It is worth noting that the in \cl{} the reader revolves around a central opaque
+It is worth noting that in \cl{} the reader revolves around a central opaque
 data structure: the readtable.  Every customization which is made, is made to a
 readtable.  Some functions take a readtable as an optional argument while
 defaulting to the current readtable (stored in the special variable
 \sym{*readtable*}), or simply always using the default table.
 
-The HyperSpec, which is often regarded as a free and more friendly alternative
-to the \cl{} standard, defines some terminology which is quite useful:
+Before describing the algorithm used to transform source code to lisp objects,
+it is important to define some terms which will be used to describe the
+process.  These terms are all defined in the Hyperspec, which is often regarded
+as a free alternative to the \cl{} standard.
+
+\subsubsection{Overview}
+\label{subsubsec:terms-overview}
 
 \begin{description}
 \item[Terminating macro character] A character which has been marked as a
