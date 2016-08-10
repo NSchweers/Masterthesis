@@ -1,4 +1,4 @@
-\documentclass[a4paper,10pt,twoside]{article}
+\documentclass[a4paper,10pt,twoside]{report}
 %\documentclass[b5paper,8pt,twoside]{article}
 %\documentclass[a4paper]{article}
 \usepackage[utf8]{inputenc}
@@ -25,6 +25,8 @@
 \usepackage{listings}
 \usepackage{lipsum}
 \usepackage{tikz}
+
+\setcounter{secnumdepth}{4}
 
 \usetikzlibrary{trees}
 %\tikzstyle op=[draw, circle]
@@ -65,14 +67,14 @@
 \lstset{         %
   language=Lisp, %
   frame=single,  %
-  float,         %
+  %float,         %
   captionpos=b}
 
 \lstdefinestyle{lispcode}{
   language=Lisp,
   basicstyle=\scriptsize,
   frame=single,
-  float,
+  %float,
   captionpos=b,
   %stringstyle=\color{red},
   %keywordstyle=\bfseries\color{purple}
@@ -139,7 +141,7 @@
   the original part unavailable.
 \end{abstract}
 
-\section{A brief history of (GNU) Emacs}
+\chapter{A brief history of (GNU) Emacs}
 \label{sec:emacs-intro}
 
 Emacs was at first a text editor at MIT, written in machine language and
@@ -184,7 +186,7 @@ named 25.1 Emacs will also feature watered down \cl{} style multimethods.  As
 these methods were used for the code in this thesis, said code requires at least
 a pretest version of Emacs\cite{emacs-pretest}.
 
-\section{A brief history of Lisp}
+\chapter{A brief history of Lisp}
 \label{sec:lisp-hist}
 
 Pinpointing Lisps exact moment of birth is rather difficult, as it is often the
@@ -323,7 +325,7 @@ higher-order programs became possible quite early in the history of computers.
 Lisps syntax and its relationship to metaprogramming is discussed in further
 detail in section \ref{sec:lisp-special}.
 
-\section{What makes Lisp special}
+\chapter{What makes Lisp special}
 \label{sec:lisp-special}
 
 As outlined at the end of section \ref{sec:lisp-hist}, Lisp code can be
@@ -373,7 +375,7 @@ advantages to this approach, which come in at least four categories, each of
 which are discussed in more detail in the following subsections: macros, sexp
 communication, editing tools, customizable syntax.
 
-\subsection{Macros}
+\section{Macros}
 \label{subsec:macros}
 
 As programs can be represented by data structures which are accessible to the
@@ -462,7 +464,7 @@ menial task not worthy of a self respecting programmer, but also error prone and
 highly unmaintainable.  If for instance the desired prefix changes, every getter
 and every setter has to be inspected and changed.
 
-\subsection{Communication via sexps}
+\section{Communication via sexps}
 \label{subsec:sexp-communication}
 
 When a given program needs to save or read data from a file, a stream, or some
@@ -504,7 +506,7 @@ In such an example the mere reading of an expression will not yield a hash
 table.  Yet interpreting such a structure gives enough details on how to
 construct the table in memory, similar as would be done using XML.
 
-\subsection{Editing Tools}
+\section{Editing Tools}
 \label{subsec:edit-tools}
 
 While editing any kind of language, one may encounter intermediate states which
@@ -553,7 +555,7 @@ easier than other languages.\footnote{To show how ``simple'' this can be, one
   with more ``traditional'' syntax, let alone for languages with undecidable
   grammars like C++.}
 
-\subsection{Customizable Syntax}
+\section{Customizable Syntax}
 \label{subsec:custom-syntax}
 
 As Lisp syntax is merely syntax for an AST, i.e. data, this syntax can be
@@ -568,7 +570,155 @@ introductory material on the topic is quite lacking on the web, although
 Graham’s On Lisp \cite{on-lisp} does feature a short chapter on read
 macros.\todo{Add a ref to the section which details the lisp reader.}
 
-\section{Motivation}
+\chapter{Lisp Basics}
+\label{subsec:lisp-basics}
+
+This section is only intended as a short recap of what Lisp syntax is, and how
+it relates to the reader.  For more details, a Lisp textbook is more
+appropriate.  A good reference for \el{} is found at \cite{elisp-reference}.
+
+Lisp syntax never directly describes control flow, function definitions, or
+other actions, but merely data.  If the described data consists of lists and
+symbols, it will later on be treated as code, which can be compiled and
+executed.\todo{Possibly show some Lisp examples.}
+
+Such data structures can represent code by having a list with an ``action'',
+which may be a special form, a macro or a function, as its first element.  Any
+further elements are arguments to said operator.
+
+As an example, here is some code which performs a variable binding with
+\fun{let} (which is a special form), an assignment with \fun{setf} (a macro)
+and a function call to \fun{message}.
+
+\begin{lstlisting}[style=lispinline]
+  (let ((var 5)) (setf var "Hello") (message "%s" var))
+\end{lstlisting}
+
+When Lisp source code is processed, it goes through three distinct stages:
+reading, macro expansion (optionally this can also be a compile phase), and
+evaluation (which can be the execution of compiled code).
+
+The first stage is somewhat unique to Lisp---most languages only have this as an
+implementation detail in the compiler or interpreter.
+
+\section{Important Lisp Data Types}
+\label{subsec:important-types}
+
+A few Lisp data types are of particular importance, both because they are
+relatively rare in other languages, but also because they are very widespread in
+Lisp code, i.e. the reader often creates them.
+
+Every Lisp dialect the author is aware of provides at least the following:
+
+\subsection{Symbols}
+\label{subsubsec:symbols}
+
+The symbol is a type which represents a name, often together with places for
+values and/or functions.  The latter depend on the Lisp dialect.  An important
+property of symbols is that fast lookup is supported, and that symbols are
+interned.  This means that each symbol which is read, which has the same name,
+returns the same Lisp object.\footnote{This is, in effect, a singleton.}
+
+In \el{}, which is the Lisp under consideration for this thesis, a symbol has
+the following attributes:
+
+\begin{description}
+\item[{Name}] A (typically hashed) name for the symbol.  This may be retrieved
+  as a string at any time.
+\item[{Value}] This is the value of the symbol.  It may be retrieved by a call
+  to \fun{symbol-value} or by simply appearing in a program (macros or special
+  forms may treat symbols differently).
+\item[{Function}] This cell is looked up if the symbol is the first element of a
+  list which is evaluated (more on this later).  Alternatively, a call to
+  \fun{symbol-function} returns the function to which it points (if any).
+\item[{Property List}] A symbol may also have a Property List, or plist for
+  short, which is a mapping from a key (mostly a symbol) to a value.  This is
+  intended as a mechanism to store arbitrary metadata in a symbol.
+\end{description}
+
+A fifth attribute exists, which is not visible from Lisp code.  Symbols are
+placed into so called ``obarrays'', which are similar to hashtables, but are
+specialized to symbols (i.e. no other objects can be stored in them).  To
+support fast lookup and low memory usage, each symbol contains a pointer to the
+next symbol in the same bucket of the obarray.  For this reason a symbol may
+only be interned in one obarray.  Because of this limitation it is not possible
+(at the time) to implement \cl{} compatible packages for \emacs{} (not to be
+confused with the packages provided in \fun{package.el}, which are installable
+units).
+
+\subsubsection{Read Syntax}
+\label{subsubsec:symbol-syntax}
+
+The read syntax for a symbol is any token of text which is not also a valid
+number, does not contain any unescaped terminating macro characters and does not
+start with an unescaped macro character.
+
+Thus \sym{foo}, \sym{1+}, \sym{contains?} and \sym{set!} are valid symbols.
+\sym{+1} is not, as it is the positive number one.  \sym{\textbackslash{}+1} on
+the other hand is a valid symbol, as the \sym{+} sign is escaped.  Its name is
+``+1'' (i.e. the escape character is only part of the read syntax, not of the
+outcome). 
+
+\subsection{List}
+\label{subsubsec:list}
+
+In Lisp parlance, when a list is mentioned, it is almost always a singly linked
+list.  While by far not the only compound data structure\footnote{Strictly
+  speaking, lists by themselves to not exist: there are only cons-cells, yet
+  this nuance is not very important for the current discussion.}, it is a very
+important one.
+
+Not only is there syntax for lists; together with the symbol, the list is used
+as the prime representation for code.  Lists are made up of cons cells, which
+are ordered pairs of Lisp objects.  They can be constructed at runtime with a
+call to \fun{cons}, passing the two objects as arguments.  Two additional
+operations fetch the contents and serve as setf-able places: \fun{car} and
+\fun{cdr}.  The former fetches the first element of the cons, the latter the
+second.  Cons cells can be linked.  By convention, the cdr of a cons points to
+the next cons, or \sym{nil}, if at the end of a list.  This type of structure is
+called a proper list.  A chain of conses which do not end in a cons with a cdr
+of \sym{nil} is called an improper list.
+
+\subsubsection{Read Syntax}
+\label{subsubsec:list-syntax}
+
+Cons cells, proper and improper lists have read syntax to create them at
+read-time:
+
+\begin{description}
+\item[cons] A single cons may be notated as a ``dotted-pair'': \texttt{(car
+    . cdr)}
+
+  Here a new cons is created which has a car of \sym{car} and a cdr of
+  \sym{cdr}.
+\item[proper list] A proper list is notated with whitespace separated elements
+  surrounded by parentheses: \texttt{(foo bar)}
+
+  This is equivalent to \texttt{(foo . (bar . nil))}
+\item[improper list] An improper list looks like a proper list, yet uses
+  embedded dotted pair syntax at its end: \texttt{(foo bar . spam)} is
+  equivalent to \texttt{(foo . (bar . spam))}.
+\end{description}
+
+\subsection{Other Types}
+\label{subsec:other-types}
+
+Most other types are rather unspectacular and depend on the dialect under
+consideration.  Practically all Lisps provide strings, \el{} even provides an
+alternate notation which provides text properties: \texttt{\#("foo" 0 1 (escapedp
+  t))}.  This represents a string ``foo'', with the property \sym{'escaped} and
+the corresponding value \sym{t} on the first letter.
+
+Numbers are also often a little different than in mainstream languages.  Both
+\cl{} and scheme provide exact fractions.  \cl{} and \el{} provide read syntax
+for integers in several bases: \texttt{\#b1111} \texttt{\#o17} \texttt{\#xF} and
+\texttt{15} all represent the number 15 in base 10.  This notation is the same
+in \cl{} and \el{}.  This notation has a certain air of elegance to it as soon
+as one realizes that \texttt{\#} is a dispatching macro character\todo{Add a
+  section on dispatching macro characters and reference it.}.  This means that
+\texttt{\#b}, \texttt{\#o} and \texttt{\#x} may be implemented as read macros.
+
+\chapter{Motivation}
 \label{sec:motivation}
 Users of other Lisp dialects, especially of \cl{}, have enjoyed the possibility
 to modify the syntax they use to write programs for a long time.  This
@@ -812,7 +962,7 @@ Here is how it is used:
 #w[foo bar spam eggs] => ["foo" "bar" "spam" "eggs"]
 \end{lstlisting}
 
-\section{Replacing Emacs’ built-in reader}
+\chapter{Replacing Emacs’ built-in reader}
 \label{sec:repl-reader}
 
 When contemplating the replacement of such a critical and internal part of the
@@ -870,7 +1020,7 @@ of \el{} code, as can be seen in listing \ref{code:replace-reader}.
     (funcall oldfun stream)))
 \end{lstlisting}
 
-\subsection{Compatibility}
+\section{Compatibility}
 \label{subsec:compat}
 
 When replacing such a critical part of a language, it is important to maintain
@@ -940,10 +1090,10 @@ this reason, read macros must always wrap their return value in \fun{list}, or
 \fun{cl-values} (which---at the time of writing---is an alias for \fun{list}).
 
 Note that the keys argument never has to be given by the user.  It is given only
-in one single place, which is in \fun{el-reader/read} itself, i.e. in a
-self-recursive call.  Nevertheless, the user must always return a list of values
-in read macros, which is a shame, as it departs from the way it is done in
-\cl{}.
+in one two places, which is in \fun{el-reader/read} itself, i.e. in a
+self-recursive call, and in the function \fun{el-reader/read-delimited-list}.
+Nevertheless, the user must always return a list of values in read macros, which
+is a shame, as it departs from the way it is done in \cl{}.
 
 There are other features which are present in \cl{} but not in \el{}, yet none
 of them are so critical (and difficult to retrofit) as multiple values.  Some
@@ -953,6 +1103,11 @@ non-nil default values for optional arguments.  These can be used with
 
 Other features have only started to appear in \emacsv{25}, such as multiple
 dispatch, which is the main reason \elr{} doesn’t work on \emacsv{24.5}.
+
+While \emacs{} has a pre-defined set of types which may form a valid stream
+(with the function type being the most general), \elr{} provides a
+\fun{defclass} and \fun{cl-defgeneric} based extension mechanism.  This is
+discussed in detail in section \ref{sec:stream-types}.
 
 % \begin{enumerate}
 % \item Possibility of higher order programs, i.e. macros.
@@ -992,10 +1147,10 @@ dispatch, which is the main reason \elr{} doesn’t work on \emacsv{24.5}.
 % whether it is extensible or not.  This is discussed in section
 % \ref{sec:reader-printer}.
 
-\section{Reader and Printer}
+\chapter{Reader and Printer}
 \label{sec:reader-printer}
 
-\subsection{Readers vs. Parsers}
+\section{Readers vs. Parsers}
 \label{subsec:readers-vs-parsers}
 
 Most texts discussing compilers, interpreters and other language processors
@@ -1012,7 +1167,7 @@ and its macros operate on single characters, and return anything from a single
 token (a symbol) to a whole tree.  The details of this are discussed in section
 \ref{subsec:read-algo}.
 
-\subsection{Overview of the reader}
+\section{Overview of the reader}
 \label{subsec:reader}
 
 The Lisp reader is responsible for transforming source code into Lisp objects.
@@ -1028,7 +1183,7 @@ once\footnote{This is done at least in the implementation of a rather obscure
   input is purposefully accepted in certain situations as \emacs{} used to
   produce wrong output due to a bug.}.
 
-\subsubsection{A sketch of rules for \emacs’ reader}
+\subsection{A sketch of rules for \emacs’ reader}
 \label{subsubsec:rules-sketch}
 
 The reader API only provides for the possibility to read \emph{one} expression
@@ -1101,7 +1256,7 @@ section \todo{Add a ref!}.
 % apparent in the source code, as no special constructs are needed for loops,
 % function definitions, types or the like.
 
-\subsection{Overview of print syntax}
+\section{Overview of print syntax}
 \label{subsec:print-syntax}
 
 The printer is a part of a Lisp system, which works in tandem with the reader.
@@ -1155,14 +1310,14 @@ little more valuable, especially in aiding communication between programs.
     course other entities such as numbers, yet these are not relevant to this
     discussion.}
 \end{comment}
-% \section{Introduction}
+% \chapter{Introduction}
 % \label{sec:introduction}
 
 % This thesis discusses the design, implementation, and idiosyncrasies of \elr{},
 % an extensible reader for \el{}.  An overview over the history of Lisp, Emacs and
 % \el{} are given, as well as an introduction to 
 
-% \section{Introduction}
+% \chapter{Introduction}
 % \label{sec:introduction}
 % In this thesis, a \cl{} like extensible reader for \el{} is discussed.  Before
 % discussing the reader itself, it is important to discuss what a reader does,
@@ -1196,29 +1351,16 @@ little more valuable, especially in aiding communication between programs.
 % possibly without altering any present syntactic constructs, thus allowing new
 % constructs in an existing programming language.
 
-\subsection{Reader algorithm}
-\label{subsec:read-algo}
-
-As it is the goal of this thesis to provide an extensible reader in spirit and
-style of \cl{} it is imporant to highlight the rules of \cl{}’s reader and how
-the \elr{} deviates from these rules.
-
-The algorithm which \cl{} adheres to is detailed in the HyperSpec in section
-2.2\cite{hyperspec}.
-
-It is worth noting that in \cl{} the reader revolves around a central opaque
-data structure: the readtable.  Every customization which is made, is made to a
-readtable.  Some functions take a readtable as an optional argument while
-defaulting to the current readtable (stored in the special variable
-\sym{*readtable*}), or simply always using the default table.
+\section{Terminology}
+\label{subsec:terminology}
 
 Before describing the algorithm used to transform source code to lisp objects,
 it is important to define some terms which will be used to describe the
 process.  These terms are all defined in the Hyperspec, which is often regarded
 as a free alternative to the \cl{} standard.
 
-\subsubsection{Overview}
-\label{subsubsec:terms-overview}
+\subsection{General Terms}
+\label{subsubsec:general-terms}
 
 \begin{description}
 \item[Terminating macro character] A character which has been marked as a
@@ -1242,9 +1384,18 @@ as a free alternative to the \cl{} standard.
   different syntax types.  It is thus not sufficient to provide a relation
   between the character value and a syntax type.  See paragraph
   \ref{subsubsec:syntax-type} for more details.
+\item[Token] A token is an atomic unit of text which has been read by the
+  reader.  As it is atomic, no unescaped terminating macro characters can be
+  part of it, as they trigger a separate call to \Read{}.  When a token has been
+  accumulated, the reader tries to interpret said token as a number (or in
+  \cl{}’s case also as a so-called ``potential number'').  Should such an
+  interpretation be successful, the given number is returned.  Otherwise the
+  token is interpreted as a symbol.  As this step is rather isolated, this step
+  is performed by the built-in reader in \elr{}.  This yields significant
+  performance gains, as this step is typically performed very often.
 \end{description}
 
-\subsubsection{Character Syntax Types}
+\subsection{Character Syntax Types}
 \label{subsubsec:syntax-type}
 
 The six following Syntax Types for characters exist.  Note that while each
@@ -1270,7 +1421,7 @@ this per character instance.  I.e not every `A' has the same syntax type.
   may be empty and is in \elr{}.
 \end{description}
 
-\subsubsection{Character Traits}
+\subsection{Character Traits}
 \label{subsubsec:traits}
 
 A character which has the syntax type constituent has one or more traits.
@@ -1299,14 +1450,450 @@ the letter `e' can have different traits.  The same holds true for syntax types.
 
 Note that most of these traits are used to construct (potential) numbers.
 
+\section{Reader algorithm}
+\label{subsec:read-algo}
+
+As it is the goal of this thesis to provide an extensible reader in spirit and
+style of \cl{} it is imporant to highlight the rules of \cl{}’s reader and how
+\elr{} deviates from these rules.
+
+The algorithm which \cl{} adheres to is detailed in the HyperSpec in section
+2.2\cite{hyperspec}.
+
+It is worth noting that in \cl{} the reader revolves around a central opaque
+data structure: the readtable.  Every customization which is made, is made to a
+readtable.  Some functions take a readtable as an optional argument while
+defaulting to the current readtable (stored in the special variable
+\sym{*readtable*}), or simply always using the default table.  Note that this
+table can be dynamically rebound, as it is a so called special variable,
+i.e. its binding follows a stack discipline.
+
+The reader consists of 10 numbered steps:
+
+\begin{enumerate}
+\item Read a character from the input stream into \texttt{X}.  If at
+  end-of-file, act according to \texttt{eof-error-p} and \texttt{eof-value}.
+  If \texttt{eof-error-p} is non-\texttt{nil} (the default) signal an error.
+  Otherwise return \texttt{eof-value} (\texttt{nil} by default).
+
+  According to the syntax type of \texttt{X}, control is dispatched to one of
+  the steps 2 to 7, some of which transfer control to steps 8 to 10.
+\item If \texttt{X} is an invalid character, signal an error of type
+  \texttt{'reader-error}.  In the current implementation of \elr{} this will not
+  happen, as no character is marked as explicitly invalid.
+\item If \texttt{X} is a whitespace character, discard it and jump to step 1.
+  Normally this would be done with a tail call, yet had to be implemented with a
+  sort of trampoline.  This branch returns a marker object, which determines
+  whether to start again or return the value returned by the conditional
+  expression as a whole.
+\item If \texttt{X} is a macro character, either terminating or non-terminating,
+  its associated function is executed.  The current input stream and the
+  character (\texttt{X}) itself are passed as arguments.  Note that this step
+  only occurs when looking at the first character since the invocation of the
+  current \Read{} frame!  The open parenthesis in ``foo(bar'' would \emph{not}
+  trigger this behaviour, ``(foo'' on the other hand will.
+
+  Before calling the associated function, a special variable which allows for
+  dotted pair notation is bound to \texttt{nil} for the duration of said inner
+  call.  The return value of the associated function is the return value of the
+  conditional being discussed at the moment, unless it is not a list of
+  arbitrary length.  Further dispatching on the length of the list (especially
+  if the list is empty) is done outside of this conditional and is discussed
+  later.  This will become critical to comments.
+
+  It is critical that the reader macros perform no side-effects other than
+  advancing the stream, as code may be read zero or more times.  This is
+  especially true when \Read{} is called by editing tools, as they may read
+  inner or outer parts of an expression which overlap, and do not care for any
+  effects designed for the program which is being edited.
+\item If \texttt{X} is a single escape character, another character from
+  the stream is read into \texttt{Y}.
+
+  The syntax type of \texttt{Y} is set to constituent with alphabetic being its
+  only trait.  An additional property is added to \texttt{Y}, namely
+  \texttt{escapedp}.  The resulting character starts a new token, which is
+  further processed in step 8.  Note that syntax type, traits and other
+  properties are unique to every character.  An unescaped 'A' is a different
+  object from an escaped 'A'.  More details on data structures used are given in
+  section \ref{subsec:datastructures}.
+
+  Escaping characters can be used to allow characters in a symbol for which
+  there is normally no read syntax.  For instance, in and of itself, a symbol
+  may be named ``(foo)'' (note the parens, which would normally make up a list).
+  One way of obtaining such a symbol is by calling \texttt{intern}---which takes
+  a string---at runtime:
+
+  \begin{lstlisting}[style=lispinline]
+    (intern "(foo)")
+  \end{lstlisting}
+
+  The alternative is using escaping to allow this name at read time:
+  
+  \begin{lstlisting}[style=lispinline]
+    \(foo\)
+  \end{lstlisting}
+\item If \texttt{X} is a multiple escape character, a new empty token is begun
+  and control is transferred to step 9.  Note that the escape character itself
+  is consumed from the stream.
+\item If \texttt{X} is a constituent character, it begins a new token and enters
+  step 8.
+
+  The new token initially consists of one character, \texttt{X}, which has
+  copies of its syntax type and traits attached to it.
+\item At this point an even number of multiple escape chars have occurred
+  (i.e. none are currently in effect), and a token is accumulated.
+
+  A new character \texttt{Y} is read from the input stream.  If end-of-file is
+  reached, the token so far is processed.  The resulting token is the return
+  value for this branch.
+
+  Another dispatch on the syntax type of \texttt{Y} is performed:
+  \begin{enumerate}
+  \item If \texttt{Y} is invalid, an error of type \texttt{'reader-error} is
+    signaled.  In the current implementation of \elr{} this will not happen, as
+    no character is marked as explicitly invalid.
+  \item If \texttt{Y} is a single escape char, a new char \texttt{Z} is fetched
+    from the input stream and appended to the current token as an alphabetic
+    constituent with the \texttt{'escapedp} property.
+  \item If \texttt{Y} is a multiple escape char, the character is consumed as
+    usual, the token is left as is (possibly left empty).  Finally, step 9 is
+    entered.
+  \item If \texttt{Y} is a terminating macro character, \texttt{Y} is put back
+    into the stream and the token so far is processed.  The processed token (a
+    symbol or a number) is returned, thus \Read{} is done.
+  \item If \texttt{Y} is a whitespace character, \texttt{Y} is put back into the
+    stream if \texttt{*el-reader/preserve-whitespace*} is true.  In both cases
+    the token is processed and returned, thus \Read{} is done.
+  \item If \texttt{Y} is a constituent or \emph{non}-terminating macro
+    character, it is appended onto the token and step 8 repeats.
+  \end{enumerate}
+
+  In summary: a single escape char is dealt with in place, a multiple escape
+  char hands the token over to code expecting to escape everything (step 9),
+  macro characters and whitespace terminate reading\footnote{} and constituent
+  and non-terminating macro characters are appended to the token.
+
+\item At this point an odd number of multiple escape characters have been
+  encountered (i.e. escaping is in effect). 
+  \begin{enumerate}
+  \item If \texttt{Y} is either constituent, macro character (terminating and
+    non-terminating alike) or whitespace, \texttt{Y} is appended onto the stream
+    as an alphabetic constituent with the property \texttt{'escapedp} before
+    repeating step 9.
+  \item If \texttt{Y} is a single escape character, it is appended to the token
+    as an alphabetic constituent with the \texttt{'escapedp} property and step 9
+    is repeated.
+  \item If \texttt{Y} is a multiple escape character, it consumed without adding
+    it to the token before switching back to step 8.
+  \end{enumerate}
+\item An entire token has been accumulated.  The token is first checked for
+  whether or not it constitutes a valid number.  If so, that number is the
+  result of this step and hence of \Read{}.  Otherwise a symbol is constructed.
+  While \elr{} contains code to do this in \el{}, it is only used if escaped
+  characters were encountered.  Otherwise \elr{} removes its own advice from
+  \Read{}, calls \Read{} with the token and reinstates the advice.  This is done
+  for performance reasons, as the steps taken are exactly the same in \elr{} and
+  the built-in reader.  It seems as if is were faster to replace the escaped
+  characters in the token with backslashes again and let the built-in reader do
+  the job in all cases, yet such a string transformation is so costly that it is
+  almost exactly as fast.  Such code exists in \elr{}, yet is not used.
+\end{enumerate}
+
+Figure \ref{code:read-algo} shows the corresponding \el{} code.  Note that many
+steps have very straightforward translations, while the lack of multiple-values
+and tail-call optimization make rather ugly looping a necessity.  Also, steps 8
+and 9 have been pulled out as extra functions and put in front of
+\fun{el-reader/read}. 
+
+\begin{lstlisting}[style=lispcode,label={code:read-algo},caption={Code for the
+    reader algorithm.},numbers=left]
+(cl-defun el-reader//step-8 (input-stream token _x)
+  ;; Loop until we do an explicit return.  This would have been so much
+  ;; nicer with tco.  *sigh*
+  (let (y)
+    (while t
+      (setf y (condition-case nil
+                  (el-reader/getch input-stream)
+                (end-of-file (cl-return-from el-reader//step-8
+                               (el-reader//process-token token)))))
+      (cond ((el-reader//rt/invalid-syntax-type-p
+              *el-reader/readtable* y)
+             (signal 'reader-error (list "Invalid character" y)))
+            ((el-reader//rt/single-escape-char-p
+              *el-reader/readtable* y)
+             (setf token (s-concat token
+                                   (el-reader//put-escaped-prop
+                                    (el-reader//force-alphabetic
+                                     (el-reader/getch input-stream))))))
+            ((el-reader//rt/multiple-escape-char-p
+              *el-reader/readtable* y)
+             (cl-return-from el-reader//step-8
+               (el-reader//step-9 input-stream
+                                  token
+                                  y)))
+            ((el-reader//rt/terminating-macro-char-p
+              *el-reader/readtable* y)
+             (el-reader/getch input-stream y)
+             (cl-return-from el-reader//step-8
+               (el-reader//process-token token)))
+            ((el-reader//rt/whitespacep *el-reader/readtable* y)
+             (when *el-reader/preserve-whitespace*
+               (el-reader/getch input-stream y))
+             (cl-return-from el-reader//step-8
+               (el-reader//process-token token)))
+            ((or (el-reader//rt/constituentp *el-reader/readtable* y)
+                 (el-reader//rt/non-terminating-macro-char-p
+                  *el-reader/readtable* y))
+             (setf token (s-concat token
+                                   (el-reader//defaults-to-str-props
+                                    y))))))))
+
+(cl-defun el-reader//step-9 (input-stream token x)
+  ;; At this point a token is being accumulated, and an odd
+  ;; number of multiple escape characters have been encountered.
+  (let (y)
+    (while t
+      (setf y (el-reader/getch input-stream))
+      (cond
+       ((funcall (apply
+                  #'-orfn
+                  (seq-map
+                   (lambda (fn)
+                     (-partial fn *el-reader/readtable*))
+                   (list
+                    #'el-reader//rt/constituentp
+                    #'el-reader//rt/terminating-macro-char-p
+                    #'el-reader//rt/non-terminating-macro-char-p
+                    #'el-reader//rt/whitespacep)))
+                 y)
+        (setf token (s-concat token (el-reader//put-escaped-prop
+                                     (el-reader//force-alphabetic y)))))
+       ((el-reader//rt/single-escape-char-p *el-reader/readtable* y)
+        (setf token (s-concat
+                     token
+                     (el-reader//put-escaped-prop
+                      (el-reader//force-alphabetic
+                       (el-reader/getch input-stream))))))
+       ((el-reader//rt/multiple-escape-char-p *el-reader/readtable* y)
+        (cl-return-from el-reader//step-9
+          (el-reader//step-8 input-stream token x)))
+       ((el-reader//rt/invalidp *el-reader/readtable* y)
+        (signal 'reader-error "Invalid char"))))))
+
+(cl-defun el-reader/read (&optional input-stream (eof-error-p t)
+                                    eof-value recursive-p keys)
+  (let ((res *el-reader/repeat-read*)
+        (input-stream (el-reader//get-getch-state input-stream)))
+    (while (eq res *el-reader/repeat-read*)
+      (setf
+       res
+       (let ((x (condition-case c
+                    (el-reader/getch input-stream)
+                  (end-of-file
+                   (if eof-error-p
+                       (signal (car c) (cdr c))
+                     (cl-return-from el-reader/read eof-value))))))
+         (when (not recursive-p)
+           (setf *el-reader//read-objects* nil
+                 *el-reader//circular-read-functions* nil))
+         (cond ((el-reader//rt/invalid-syntax-type-p
+                                    *el-reader/readtable* x)
+                (signal 'reader-error (list "Invalid char" x)))
+               ((el-reader//rt/whitespacep *el-reader/readtable* x)
+                *el-reader/repeat-read*)
+               ((el-reader//rt/terminating-macro-char-p
+                 *el-reader/readtable* x)
+                (let ((*el-reader//allow-single-dot-symbol* nil))
+                  (let ((res (funcall
+                              (gethash x (el-reader//rt/term-mac-fns
+                                *el-reader/readtable*))
+                              input-stream x)))
+                    (when (not (listp res))
+                      (error (s-join
+                              " "
+                              '("Read-macro functions must always"
+                                "return a (possibly empty) list."))))
+                    res)))
+               ((el-reader//rt/non-terminating-macro-char-p
+                 *el-reader/readtable* x)
+                (let ((*el-reader//allow-single-dot-symbol* nil))
+                  (let ((res (funcall
+                              (gethash
+                               x
+                               (el-reader//rt/non-term-mac-fns
+                                *el-reader/readtable*))
+                              input-stream x)))
+                    (when (not (listp res))
+                      (error (s-join
+                              " "
+                              '("Read-macro functions must always"
+                                "return a (possibly empty) list."))))
+                    res)))
+               ((el-reader//rt/single-escape-char-p
+                                    *el-reader/readtable* x)
+                (cl-values (el-reader//step-8
+                            input-stream
+                            (el-reader//put-escaped-prop
+                             (el-reader//force-alphabetic
+                              (el-reader/getch input-stream)))
+                            x)))
+               ((el-reader//rt/multiple-escape-char-p
+                                    *el-reader/readtable* x)
+                (cl-values (el-reader//step-9 input-stream "" x)))
+               ((el-reader//rt/constituentp *el-reader/readtable* x)
+                (cl-values (el-reader//step-8
+                            input-stream
+                            (el-reader//defaults-to-str-props x)
+                            x)))))))
+    (if (plist-get keys :return-list)
+        res
+      (if res
+          (car res)
+        (let ((res))
+          (while (not res)
+            (setf res
+                  (el-reader/read input-stream eof-error-p eof-value
+                                  recursive-p '(:return-list t))))
+          (car res))))))
+\end{lstlisting}
+
+
+\section{Additional algorithms}
+\label{sec:add-algos}
+
+While section \ref{sec:read-algo} details the reader algorithm itself, it alone
+is not sufficient to read lisp code.  For instance, the reader algorithm does
+not specify a single macro character.  While simple ones like \fun{quote} are
+very simple, matching pairs of characters is a little more tricky.  When an open
+parenthesis is encountered, it starts reading elements with recursive calls to
+\Read{}.  Yet the reader algorithm itself does not specify how to reliably
+detect when to stop reading, unless end-of-file is encountered.  One cannot
+simply check whether the next character in the stream is a close paren, as
+comments and whitespace may lie in between the current position and the closing
+paren:
+
+\begin{lstlisting}[style=lispinline]
+  (foo ;; comment
+    bar)
+\end{lstlisting}
+
+This is why the function \fun{read-delimited-list} exists.
+
+\subsection{read-delimited-list}
+\label{subsec:read-delimited-list}
+
+The purpose of \fun{read-delimited-list} is to read successive elements from the
+input stream until a terminating character is found, returning the read elements
+as a list.  For almost all purposes the terminating character must be a
+terminating macro character, as it may otherwise be consumed by inner tokens.
+For instance, in ``(foo bar)'' the second element would read as ``bar)'' if
+``)'' was not a terminating macro character.  The terminating character is
+consumed when encountered, thus the associated code is only executed on
+incorrect input.  For this reason, most characters used as closing delimiters
+reuse the definition for the closing parenthesis, which unconditionally signals
+an error.
+
+The function \fun{read-delimited-list} must know details about the inner
+workings of the reader implementation, as it must check a characters syntax
+type, which is not normally part of the public API.
+
+Its signature is as follows:
+
+\begin{lstlisting}[style=lispinline]
+  (el-reader/read-delimited-list char &optional stream
+    recursive-p)
+\end{lstlisting}
+
+As before, the discussion of how the function works will be followed by the code
+itself.
+
+\fun{read-delimited-list} looks one char ahead, i.e. reads a character without
+consuming it.  None of the code discussed so far does this directly.  While not
+relevant to any stream type built into \elr{}, it may be possible for a stream
+to support unreading of only one character, thus \fun{el-reader/peek-char} is
+used.
+
+The following steps constitute the algorithm for \fun{read-delimited-list}:
+
+\begin{enumerate}
+\item The character \sym{C} is obtained by \fun{el-reader/peek-char}.
+\item \label{loop-step}
+  If \sym{C} matches \sym{char} (i.e. the character to terminate the list)
+  the character is consumed from the list.  Finally, the reversed list of read
+  objects is returned.
+\item Depending on the syntax type of \sym{C}, one of the following actions is
+  performed:
+  \begin{enumerate}
+  \item If \sym{C} is invalid, a \sym{'reader-error} is signaled.
+  \item If \sym{C} is whitespace, \sym{C} is consumed from the input stream and
+    a new character is read with \fun{el-reader/peek-char} and stored in
+    \sym{C}.
+  \item If \sym{C} is a constituent, macro character (terminating or
+    non-terminating), or an escape character (single or multiple), \Read{} is
+    called to potentially produce an object.  If \Read{} returns no object (in
+    the default configuration this only happens on comments), the whole process
+    is repeated, now with an advanced input stream.  Otherwise, the returned
+    object is added to the front of a list of objects (initially empty).
+  \end{enumerate}
+\item Control is transferred back to step \ref{loop-step}.
+\end{enumerate}
+
+
+\begin{lstlisting}[style=lispcode,label={code:read-delim-list},caption={Code for
+  \fun{read-delimited-list}},numbers=left]
+(defun el-reader/read-delimited-list (char &optional stream
+                                           _recursive-p)
+  (let ((end-res *el-reader/repeat-read*))
+    (while (eq end-res *el-reader/repeat-read*)
+      (setf
+       end-res
+       (let ((res-list nil)
+             (c (el-reader/peek-char stream)))
+         (while (/= c char)
+           (cond
+            ((el-reader//rt/invalid-syntax-type-p
+              *el-reader/readtable* c)
+             (signal 'reader-error (list "Invalid char" c)))
+            ((el-reader//rt/whitespacep *el-reader/readtable* c)
+             (el-reader/getch stream)
+             (setf c (el-reader/peek-char stream)))
+            ((or (el-reader//rt/constituentp *el-reader/readtable* c)
+                 (el-reader//rt/terminating-macro-char-p
+                  *el-reader/readtable* c)
+                 (el-reader//rt/non-terminating-macro-char-p
+                  *el-reader/readtable* c)
+                 (el-reader//rt/single-escape-char-p
+                  *el-reader/readtable* c)
+                 (el-reader//rt/multiple-escape-char-p
+                  *el-reader/readtable* c))
+             (let ((res (el-reader/read stream t nil t
+                                        '(:return-list t))))
+               (if res
+                   (if (listp res)
+                       (push (car res) res-list)
+                     (error (s-join
+                             " "
+                             '("Read-macro functions must always "
+                               "return a (possibly empty) list."))))
+                 *el-reader/repeat-read*))
+             (setf c (el-reader/peek-char stream)))))
+         (el-reader/getch stream)
+         (reverse res-list))))
+    end-res))
+\end{lstlisting}
+
+
+% TODO NEXT: put in source code and walk through it?  Do so for the reader
+% algorithm too?  Explain what the function does, possibly even the messy bits
+% about missing tail calls and multiple-values.
+
 \begin{comment}
-  \section{Lisp Basics}
+  \chapter{Lisp Basics}
   \label{subsec:lisp-basics}
 
   This section is only intended as a short recap of what Lisp syntax is, and how
   it relates to the reader.  For more details, a Lisp textbook is more
   appropriate.  A good reference for \el{} is found at \cite{elisp-reference}.
-  The chapters
 
   Lisp syntax never directly describes control flow, function definitions, or
   other actions, but merely data.  If the described data consists of lists and
@@ -1322,7 +1909,7 @@ Note that most of these traits are used to construct (potential) numbers.
   and a function call to \fun{message}.
 
 \begin{lstlisting}[style=lispinline]
-  (let ((var 5)) (setf var "Hello") (message "%s" var))
+  (let ((var 5)) (setf var "Hello") (message "\%s" var))
 \end{lstlisting}
 
 When Lisp source code is processed, it goes through three distinct stages:
@@ -1332,7 +1919,7 @@ evaluation (which can be the execution of compiled code).
 The first stage is somewhat unique to Lisp---most languages only have this as an
 implementation detail in the compiler or interpreter.
 
-\subsection{Reader}
+\section{Reader}
 \label{subsec:reader}
 
 The reader is the first stage which code runs through.  This part of the
@@ -1348,20 +1935,20 @@ It also defines where a token ends, in the absence of whitespace. For instance,
 the following expressions are all slightly different textual representations of
 the same object, i.e. later stages cannot distinguish between the two.
 
-\subsection{Macro expansion}
+\section{Macro expansion}
 \label{subsec:macro-exp}
 
-\subsection{Evaluator}
+\section{Evaluator}
 \label{subsec:evaluator}
 
 
 
-\section{Reader basics}
+\chapter{Reader basics}
 \label{sec:reader-basics}
 
 Before discussing what the reader is and what it does, it is important to first
 introduce a few important data types.
-\subsection{Important Lisp Data Types}
+\section{Important Lisp Data Types}
 \label{subsec:important-types}
 
 A few Lisp data types are of particular importance, both because they are
@@ -1370,7 +1957,7 @@ Lisp code, i.e. the reader often creates them.
 
 Every Lisp dialect the author is aware of provides at least the following:
 
-\subsubsection{Symbols}
+\subsection{Symbols}
 \label{subsubsec:symbols}
 
 The symbol is a type, which represents a name, often together with places for
@@ -1396,7 +1983,7 @@ the following attributes:
   intended as a mechanism to store arbitrary metadata in a symbol.
 \end{description}
 
-\subsubsection{List}
+\subsection{List}
 \label{subsubsec:list}
 
 In Lisp parlance, when a list is mentioned, it is almost always a singly linked
@@ -1409,7 +1996,7 @@ Not only is there syntax for lists---in the form of parentheses---together with
 the symbol, the list is used as the prime representation for code.  The
 following section hat some examples, as it discusses the result of calling the
 reader.
-\subsection{Lisp basics}
+\section{Lisp basics}
 \label{subsec:lisp-basics}
 
 This section is about a few basics of Lisp, not so much the reader.  Here it is
@@ -1469,7 +2056,7 @@ Note that the third element, although it is a list, is neither evaluated, nor
 must it be quoted.  This is because \fun{defun} is a macro, and macros may
 control how to evaluate their arguments.
 
-\subsection{What does the reader do?}
+\section{What does the reader do?}
 \label{subsec:what-does-the-reader-do}
 In a sense, every programming language has a reader.  Every language
 implementation must provide some means of converting characters in source code
@@ -1506,7 +2093,7 @@ typical lisp code.  This is because the list (denoted by parenthesis) is the
 structure in which code is held.  This is true for assignments, function calls,
 function definitions etc.  Examples are given below.
 
-\subsection{Properties of Lisp Syntax}
+\section{Properties of Lisp Syntax}
 \label{subsec:properties-of-lisp-syntax}
 
 The idea behind the syntax of Lisp is very different than in most other
@@ -1521,7 +2108,7 @@ So far, no evaluation rules have been discussed, and rightly so.  The evaluation
 of code is not something the reader takes part in.  This is left to the
 interpreter or the compiler.
 
-\subsection{Intermezzo: syntax at runtime}
+\section{Intermezzo: syntax at runtime}
 \label{subsec:intermezzo:syntax-at-runtime}
 
 While some programming environments allow the user to load code at runtime, Lisp
@@ -1541,14 +2128,14 @@ ant show \cite{ant}.  Writing a document in symbolic expressions would probably
 be rather cumbersome, as either lots of strings must be used, or elaborate rules
 for the treatment of special chars as apostrophes must be devised.
 
-\subsection{Reader, Compiler, Interpreter}
+\section{Reader, Compiler, Interpreter}
 \label{subsec:reader-compiler-interpreter}
 
 In this section, an overview over the reader, compiler and interpreter, together
 with their interactions is given, as it is relevant to the central point of the
 thesis.
 
-\section{Why Emacs?}
+\chapter{Why Emacs?}
 \label{sec:why-emacs}
 
 The author chose to extend Emacs with an extensible reader, and not some other
@@ -1582,7 +2169,7 @@ macros are still missing.
 As Emacs also does not feature a built-in extensible reader, this thesis
 provided one to hopefully drive Emacs development forward some more.
 
-\section{Reader internals}
+\chapter{Reader internals}
 \label{sec:reader-internals}
 
 While the reader has a very simple interface, internally it must keep some
@@ -1624,14 +2211,14 @@ if read as ``$\backslash$('', the open parenthesis will instead be treated as an
 alphabetic constituent.  Traits such as alphabetic will be discussed in section
 \ref{subsubsec:traits}.
 
-\subsection{Syntax types}
+\section{Syntax types}
 \label{subsec:syntax-types}
 
 Here all syntax types are listed.  These are very similar to the syntax types in
 \cl{}, yet differ in a few points, as the main goal was not to parse \cl{} code,
 but to be compatible to \el{}.
 
-\subsubsection{Constituent}
+\subsection{Constituent}
 \label{par:constituent}
 
 Most characters are treated as ``constituent'' characters.  To be precise: if a
@@ -1640,7 +2227,7 @@ characters may be part of a token.
 
 Constituent characters also have traits, which will be discussed in the next
 section.
-\subsubsection{Invalid}
+\subsection{Invalid}
 \label{subsubsection:invalid}
 
 If the reader encounters an invalid character, an error is raised.  This does
@@ -1649,13 +2236,13 @@ to skip such characters, or may use them in creative ways.  This is completely
 up to the user.  The default readtable does not specify any characters to have
 the invalid syntax type.
 
-\subsubsection{Whitespace}
+\subsection{Whitespace}
 \label{par:whitespace}
 
 These are characters which serve no special meaning.  The name should be pretty
 explanatory.
 
-\subsubsection{Single escape}
+\subsection{Single escape}
 \label{par:single-escape}
 
 In standard \el{} a single escape char allows spaces and other characters which
@@ -1670,7 +2257,7 @@ In \cl{} this is more important, as the reader up-cases all chars by default,
 which escaping also inhibits.  This aspect of \cl{} was not incorporated into
 \elr{}, as it is probably only present in \cl{} for historic reasons.
 
-\subsubsection{Multiple escape}
+\subsection{Multiple escape}
 \label{par:multiple-escape}
 
 These chars are similar to single escape chars.  While a single escape only
@@ -1679,7 +2266,7 @@ multiple escape char.  In \cl{} the `|' character is used by default, in \elr{}
 the functionality is present, yet no character has been assigned, as most users
 would not expect the pipe character to behave in such a way.
 
-\subsubsection{Terminating macro character}
+\subsection{Terminating macro character}
 \label{par:terminating-macro-char}
 
 These characters are what make read macros so interesting.  Every macro
@@ -1704,7 +2291,7 @@ stream, and "foo" is treated as a token.  In the next call to \fun{read} (should
 there be any), the function associated with `(' will be called, which in turn is
 the result of the read call.
 
-\subsubsection{Non-terminating macro character}
+\subsection{Non-terminating macro character}
 \label{subsubsec:non-terminating-macro-char}
 
 These characters are very similar to \emph{terminating} macro characters.  The
@@ -1717,7 +2304,7 @@ constituents have been read before, an non-terminating macro character is
 treated the same as a terminating macro character.
 
 
-\subsubsection{Traits}
+\subsection{Traits}
 \label{subsubsec:traits}
 
 Every character which is a constituent also has one or more traits, which
@@ -1755,10 +2342,10 @@ are used while constructing numbers.
 \label{par:invalid}
 
 Should a character with this trait be encountered, an error is thrown.  So far,
-\elr{} does not specify any characters to be of invalid trait.
+\elr{} does not specify any characters to have this trait.
 \end{comment}
 
-\section{API overview}
+\chapter{API overview}
 \label{sec:api-overview}
 
 The API of \elr{} takes lots of inspiration from the corresponding API in
@@ -1770,7 +2357,7 @@ more widely available than for any other Lisp, probably due to its stable
 standard.  \footnote{Paul Grahams book ``On Lisp''\cite[p.~224]{on-lisp}
   contains a chapter explaining both regular macros and read macros.}
 
-\subsection{The readtable}
+\section{The readtable}
 \label{subsec:readtable}
 
 The only user visible data structure is the readtable.  In \cl{} this type has
@@ -1779,12 +2366,17 @@ non-enumerable types, while in \elr{} it is defined in terms of
 will need none of these.  They are mostly needed when creating a completely new
 readtable from scratch.
 
-\subsection{Functions}
+\section{Functions}
 \label{subsec:functions}
 
 Here be dragons.
 
-% \section{References}
+\section{Stream Types}
+\label{sec:stream-types}
+
+
+
+% \chapter{References}
 % \label{sec:references}
 % \begin{description}
 % \item[{srfi-10}] \url{http://srfi.schemers.org/srfi-10/srfi-10.html}
