@@ -54,6 +54,7 @@
 \newcommand{\windows}{MS Windows\texttrademark}
 \newcommand{\Read}{\fun{read}}
 \newcommand{\nil}{\sym{nil}}
+\newcommand{\tee}{\sym{t}}
 
 % \newenvironment{myEnv} [2]
 % {\begin{frame} \frametitle{#1} \framesubtitle{#2} \begin{center}}
@@ -1249,7 +1250,7 @@ Note that this read construct is a deviation from a previously introduced one:
 the list.  Also, symbols consisting only of a dot, as used here, are otherwise
 not permitted, neither in \el{} nor \cl{}.  Both \emacs{} and the code used in
 this thesis use a similar strategy to resolve this issue, as is discussed in
-section \todo{Add a ref!}.
+section \ref{subsec:irregular-dotted-pair}.
 
 % The reader is a part of a Lisp system.  As outlined before, a string of
 % characters (source code) is transformed into an AST in any language.  In Lisp,
@@ -2251,6 +2252,67 @@ of read macros, not by hardwiring the rules for the syntax into a parser.
     #'el-reader//parse-extension)))
 \end{lstlisting}
 
+\subsubsection{Explanation}
+\label{subsubsec:parser-explanation}
+
+Functions like \fun{el-reader//parse-seq} take one or more functions which
+themselves take a token and a position and return a \sym{result}, and return a
+function of the same type, i.e. take a token and position and return a result.
+To better illustrate this, it may be useful to employ a more formal and succinct
+syntax for function signatures.
+
+Haskell\cite{haskell.org} has such a syntax which I shall borrow: ``typeA ->
+typeB'' represents a function which takes an argument of type ``typeA'' and
+returns an argument of type ``typeB''.  ``A -> B -> C'' represents a function
+which takes an ``A'' and a ``B'' and returns a ``C''.  ``(A -> B) -> C'' on the
+other hand represents a function which takes a function from an ``A'' to a ``B''
+and returns a ``C''.
+
+So the type of \fun{el-reader//parse-seq} is:
+
+\begin{lstlisting}[style=lispinline]
+  (token -> pos -> result) -> (token -> pos -> result)
+  ... -> (token -> pos -> result)
+\end{lstlisting}
+
+On the other hand, functions which directly parse an entity have the following
+signature:
+
+\begin{lstlisting}[style=lispinline]
+  (token -> pos -> result)
+\end{lstlisting}
+
+Thus, functions which parse an entity may be passed to functions which combine
+such functions.
+
+Last but not least there are also functions which return a function which parse
+an entity based on some input.  One such function is
+\fun{el-reader//parse-single-char}, which has the following signature:
+
+\begin{lstlisting}[style=lispinline]
+  char -> (token -> pos)
+\end{lstlisting}
+
+This means that it takes a single character as an argument and returns a
+function which parses this exact character given both a token and a position.
+If one wanted to parse the literal character sequence ``+INF'', as is needed to
+correctly parse floating point numbers representing infinity (either positive or
+negative), one can construct such a function using \fun{parse-seq} and
+\fun{parse-single-char}, as can be seen in listing \ref{code:parse-inf-marker}.
+
+\begin{lstlisting}[style=lispcode,label={code:parse-inf-marker},caption={Parse
+    ``+INF''},numbers=left]
+(defvar *el-reader//pf/parse-inf-marker*
+  (el-reader//parse-seq
+   (el-reader//parse-single-char ?+)
+   (el-reader//parse-single-char ?I)
+   (el-reader//parse-single-char ?N)
+   (el-reader//parse-single-char ?F)))
+\end{lstlisting}
+
+Using this form of function combination it is possible to write parts of the
+parser in a fairly declarative form without even having to resort to macros.
+
 \section{Datastructures}
 \label{sec:datastructures}
 
@@ -2301,9 +2363,182 @@ functions use the global default, which is the variable
 the variable is dynamically bound, i.e. can be rebound on a stack frame with
 \fun{let}.  This makes global variables much more powerful than in more static
 languages like C, as they are globally visible, but can be rebound for anything
-below the current stack frame. 
+below the current stack frame.
 
+\subsection{Streams}
+\label{subsec:streams}
 
+Both in \cl{}, \el{}, and in \el{} with \elr{}, the first argument to \Read{} is
+a stream.  As Emacs does not provide a good abstraction over streams, one had to
+be created.  Before showing how these are implemented, a short explanation of
+multimethods is in order.  For a more thorough explanation, Peter Seibels book
+``Practical Common Lisp'' has two very good chapters on how Object
+Orientation---and hence multimethods---is done in \cl{}.\cite{pcl} Emacs 25.1
+tries to mimic this behavior.
+
+\subsubsection{Multimethods}
+\label{subsubsec:multimethods}
+
+In contrast to more mainstream Object Oriented languages, in \cl{} methods do
+not belong to classes.  Rather, in \cl{} the programmer may define a generic
+function, which consists only of name, a lambda-list (i.e. an argument list)
+and---in \el{}---optionally a default implementation.  Additionally, methods may
+be defined, which provide an implementation for particular classes of arguments.
+As long as methods only specialize on the first argument, they work very similar
+to classic single-dispatch (i.e. virtual methods).  This means that a concrete
+method is chosen according to the type of the first argument.
+
+The power and name of multimethods come from the possibility to dispatch on more
+than one argument (also called ``multiple dispatch'').  Hence the argument on
+which dispatching is performed does not necessarily have to be the first.  This
+means that the concrete method is chosen according to the classes of
+(potentially) \emph{all} arguments of the argument list.
+
+Another advantage of multimethods is that methods may specialize on types not
+defined by the author of the method.  This is of critical importance to the code
+of this thesis.
+
+As multimethods are not part of the language core, but are a set of macros which
+were added later, there are some types, for which dispatching is not exactly
+straightforward.  This is the case in \el{}, not \cl{}!
+
+It is not possible to directly dispatch on functions, as there is no universal
+function type.  A function may be byte-compiled, or it may be a list, where the
+first element just happens to be the symbol \sym{lambda}.  A function may also
+be a list, where the first symbol just happens to be \sym{closure},
+followed---among other things---by an environment which represents the lexical
+environment which was in place as the closure was created.
+
+\subsubsection{Generic functions and methods for streams}
+\label{subsubsec:multimethods-streams}
+
+In order to handle streams in an extensible way, at least two operations have to
+be provided for all objects which may be a stream: fetching a character and
+putting a character back onto the stream.  This means that state must be kept.
+In the case of a buffer or marker this is already done.  A function may also
+function as a stream by returning a character when called without any argument,
+and putting a character back when called with an argument (putting the given
+character back onto the stream).  For strings however, this does not work
+directly, so another mechanism is needed first: one must be able to retrieve a
+stateful object from a stateless one.  For this, the generic function
+\fun{el-reader//get-getch-state} was defined.  It takes an argument and returns
+a stateful version of the given argument, or the unchanged argument if no
+conversion is needed (as for buffers and markers).
+
+% The default implementation checks whether the given argument is a function or
+% not.  If not, it is returned as is, assuming that a specialization on
+% \fun{getch} already exists.  If a specialization for the given
+% argument existed, it would have been chosen over the default method.
+
+If the given argument \texttt{is} a function, it is wrapped in a
+\sym{function-read-state} object, which serves as a workaround for
+the fact that \el{} cannot dispatch on functions.  This object merely holds the
+function given.  Also, a method for \fun{getch} exists which merely
+calls the function given, i.e. doesn't do much.
+
+The previous paragraph does not hold if the given argument is the function
+\fun{get-file-char}.  This is because this particular function is passed in by
+\emacs{}, yet signals an error if given an argument to push back onto the
+stream.  As a workaround for this quirk the function is wrapped in a closure
+which holds its own list of pushed back characters before it is wrapped by a
+\sym{function-read-state}.
+
+Additional methods were provided for strings and functions.  Strings need
+special handling, as they do not hold a current position as part of their
+state.  Functions need a wrapper which does not hold any additional data, but
+provides a type on which a method may dispatch.
+
+The other generic function needed provides the actual mechanism of fetching and
+restoring a character, named \fun{el-reader/getch}.  This function
+accepts---besides an object returned from \fun{el-reader//get-getch-state}---an
+optional character.  If no character is given, a character is read from the
+steam and the position of the stream is advanced by one.  If a char is given it
+is returned to the stream and the position is decreases.  The code in the actual
+reader assumes that only one character may be put back, and further assumes that
+only characters which have been read may be returned.  This is because the
+reader does not need more capabilities and also works on input sources which
+shall not change or are even read only.  Calling \Read{} on a buffer should not
+mutate said buffer.
+
+\subsection{Structures for the recursive descent parser}
+\label{subsec:parser-structs}
+
+The recursive descent parser used in order to parse numbers uses several classes
+which serve both as structures and as dispatch targets.
+
+\subsubsection{The \sym{result} type}
+\label{subsubsec:result}
+
+Every operation in the parser returns an object of type \fun{el-reader//result},
+regardless of success.  The object itself contains these fields:
+
+\begin{description}
+\item[success] A symbol which is either \nil{} (false) or non-\nil{}, mostly
+  \tee{}.
+\item[token] the token which is processed.  This is either a complete number, a
+  symbol, or a syntax error.  This is of type string.
+\item[pos] An offset at which the token begins.  An integer.
+\item[newpos] The position at which the token (so far) ends.  This is used in
+  later calls to know where to continue reading.  An integer.
+\item[result] This may be an object of any type, even \nil{}.  It represents the
+  result of a parsing function.  This is only of interest if \sym{success} is
+  non-\nil{}.  This value is set by virtually all parsing functions.  Some
+  functions add to it, possibly first converting a previous value to a list
+  (\fun{parse-seq} does this).  Others condense it into a different object.  An
+  example for this is \fun{parse-float} and several other functions it calls.
+  These functions successively condense the result until a single \sym{float}
+  remains.
+\item[metadata] This may be any value, but mostly is used---if at all---as a
+  plist, representing mappings from keywords to arbitrary Lisp objects.  This is
+  set by \fun{parse-alt} to a value which hints which of the given alternatives
+  was successful, hence makes up the value.  This was not really used after
+  all, so it may be removed in future versions.
+\end{description}
+
+While the slots \sym{success} \sym{token} \sym{pos} \sym{newpos} and
+\sym{metadata} are only needed for the parsing, i.e. \emph{recognizing} a given
+structure, \sym{result} is at the heart of actually producing a value.  This is
+why every parsing function directly or indirectly returns such an outer
+\sym{result}.  Some functions take one or more \sym{el-reader//result} objects
+and combine their \sym{result} \emph{slots}.  The function \fun{parse-seq} does
+this by putting objects in a list, but several functions rather create objects
+of the type \sym{el-reader//syntax-element} or a derivative.
+
+\subsubsection{The \sym{syntax-element} type}
+\label{subsubsec:syntax-element}
+
+Many functions put an object of type \sym{el-reader//syntax-element} or one of
+its descendants into the \sym{result} slot of the returned
+\sym{el-reader//result} object.  In the most simple case such an object merely
+contains of a \sym{value} slot, but descendants may add additional slots.
+
+These are all syntax elements used are the following (as far as not mentioned
+otherwise, all types descend from \sym{syntax-element}.
+
+\begin{description}
+\item[syntax-element] Only contains a \sym{value} which may be an object of any
+  type. 
+\item[digit] Besides a \sym{value} which represents the numeric value of the
+  string of text which was parsed (i.e. recognized) as a digit, it also contains
+  a \sym{base} slot, which contains the base in which it was read as an integer.
+\item[decimal-digit] This type is the same as a \sym{digit}, yet always has the
+  value 10 as its base.  The main difference is that it has a different type
+  tag.  This type descends from \sym{digit}.
+\item[exponent-marker] Apart from the \sym{value} slot which contains a
+  symbol which represents the type of marker used
+  (e.g. \sym{'single-exponent-marker}).
+\item[exponent] Directly descends from \sym{syntax-element}, contains an integer
+  as its \sym{value} slot.
+\item[char] Contains a single character.
+\item[sign] Contains a symbol which encodes which sign (if any) was parsed.
+\item[plus-sign] Descends from \sym{sign}, always contains a plus sign.  Serves
+  a similar purpose as \sym{decimal-digit}.
+\item[decimal-point] Represents a decimal digit.
+\item[inf-marker] Represents an infinity marker.
+\item[nan-marker] Represents a \textbf{N}ot \textbf{a} \textbf{N}umber marker.
+\item[float] Represents a float.  Its \sym{value} slot is the float it
+  represents.
+\end{description}
 
 \chapter{API overview}
 \label{sec:api-overview}
