@@ -1109,7 +1109,7 @@ dispatch, which is the main reason \elr{} doesn’t work on \emacsv{24.5}.
 While \emacs{} has a pre-defined set of types which may form a valid stream
 (with the function type being the most general), \elr{} provides a
 \fun{defclass} and \fun{cl-defgeneric} based extension mechanism.  This is
-discussed in detail in section \ref{sec:stream-types}.
+discussed in detail in section \ref{subsec:streams}.
 
 % \begin{enumerate}
 % \item Possibility of higher order programs, i.e. macros.
@@ -2350,8 +2350,8 @@ functions:
 \item \fun{el-reader/set-macro-character} 
 \item \fun{el-reader/get-macro-character}
 \item \fun{el-reader/make-dispatch-macro-character}
-\item \fun{el-reader/get-dispatch-macro-character}
 \item \fun{el-reader/set-dispatch-macro-character}
+\item \fun{el-reader/get-dispatch-macro-character}
 \end{itemize}
 All of these functions take a readtable and either give a macro character a
 function, or retrieve said function.
@@ -2361,9 +2361,36 @@ take a readtable as an argument, as this would be very cumbersome.  These
 functions use the global default, which is the variable
 \sym{*el-reader/readtable*}.  It is important to note that `global' means that
 the variable is dynamically bound, i.e. can be rebound on a stack frame with
-\fun{let}.  This makes global variables much more powerful than in more static
-languages like C, as they are globally visible, but can be rebound for anything
-below the current stack frame.
+\fun{let}.  This makes global variables much more powerful and useful than in
+more static languages like C, as they are globally visible, but can be rebound
+for anything below the current stack frame.
+
+The readtable holds two slots which determine the association of macro
+characters to their appropriate function: \sym{term-mac-fns} and
+\sym{non-term-mac-fns} which are both hash-tables from a character (i.e. an
+integer) to a function.  The former is for terminating, the latter for
+non-terminating characters.  Otherwise, both work the same.  These slots also
+serve the purpose of determining whether a character is a (non-)terminating
+macro character or not, as one can check whether a key is present in a table or
+not.
+
+The readtable also has a slot which holds a mapping for dispatching macro
+characters.  By default this table only has one key: `\#'.  The corresponding
+value is in turn also a hash-table which in turn maps characters to functions.
+
+The function \fun{el-reader/make-dispatch-macro-character} associates a function
+with the dispatching character.  This function first tries to read a decimal
+number from the input stream.  This does \texttt{not} use \Read{}, but uses
+\fun{el-reader//getch} instead.  As soon as \fun{getch} does not return a
+character between `0' and `9', the offending character is pushed back onto the
+stream and the read number (if any) is converted.  As the next step, the offending
+character is read from the stream (again), and used as a key in a lookup table
+which records how to dispatch further.  This way the characters used in
+dispatching macros and regular macro characters may overlap without causing
+problems.  For instance the construct ``\#4r0123'' uses the character `r' as a
+sort of macro character without causing the rest of the reader to mistake `r'
+for a macro character.  Also, the number---if any---is passed to the function
+associated with the dispatch character.
 
 \subsection{Streams}
 \label{subsec:streams}
@@ -2552,6 +2579,245 @@ more widely available than for any other Lisp, probably due to its stable
 standard.  \footnote{Paul Grahams book ``On Lisp''\cite[p.~224]{on-lisp}
   contains a chapter explaining both regular macros and read macros.}
 
+The intention of this chapter is to serve as a short user manual/tutorial on how
+to use read macros.  It should not be necessary to have read the rest of this
+thesis, as long as one already knows a fair amount of Lisp, preferably \cl{}
+and/or \el{}.
+
+At first, the general outline of how to setup a read macro will be discussed.
+Afterwards an example will be implemented, which will explain why the steps are
+done in the way they are.  The last section of this chapter will provide a short
+reference.  For the most part, any \cl{} reference will do, as the APIs are
+deliberately similar.
+
+\section{Outline}
+\label{sec:outline}
+
+The reader has a few user visible datastructures, but one is the most important:
+the readtable.  This structure holds all information from the syntax types and
+traits of characters, to the mapping of characters to functions.
+
+There is always exactly one readtable in effect: the structure stored in the
+special (i.e. dynamic) variable \sym{*el-reader/readtable*}\footnote{In \cl{}
+  this variable is simply called \sym{*readtable*}.  Oftentimes stripping
+  \sym{el-reader/} or \sym{el-reader//} from the name yields a name used in
+  \cl{}.}.  This table may either be modified in place, thus affecting all code
+under the same binding (possibly all code in the Emacs process, if the table is
+never rebound), or may be rebound, possibly with a copy of the existing table.
+Such a copy may be acquired with the function \fun{el-reader/copy-readtable}.
+
+For those rare cases in which a completely new table is needed, it is also
+possible to create a somewhat empty table with \fun{make-instance}.  A new table
+containing the same values as the default table may also be acquired with the
+function \fun{el-reader/make-default-elisp-readtable}.  The only values present
+in a readtable created via \fun{make-instance} are whitespace characters and a
+mapping from characters to numbers used in number conversion (i.e. `0' maps to
+0, `A' to 10, `Z' to 35).
+
+After having chosen which table to use and modify, it is time to actually modify
+the table.  This is done---as mentioned in section \ref{subsec:readtable-class}
+(\nameref{subsec:readtable-class})---with the following functions:
+
+\begin{itemize}
+\item \fun{el-reader/set-macro-character} 
+\item \fun{el-reader/get-macro-character}
+\item \fun{el-reader/make-dispatch-macro-character}
+\item \fun{el-reader/set-dispatch-macro-character}
+\item \fun{el-reader/get-dispatch-macro-character}
+\end{itemize}
+
+\subsection{\fun{set-macro-character}}
+\label{subsec:set-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/set-macro-character
+    (char new-function &optional
+          non-terminating-p
+          (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+This function is used to set a given character to be a macro character.  As can
+be seen in the last argument, a readtable may be given, but if it is omitted,
+the current table is used.  The macro character is associated with the given
+function (\fun{new-function}).  This means that \Read{} calls said function with
+the current input stream and said macro character, in that order.  Another
+important consequence of making a character a (terminating) macro character is
+that it now delimits tokens.  If for instance one were to make `a' a macro
+character, the expression \texttt{fooabar} would yield the token \texttt{foo}.
+Another read would trigger the macro character.
+
+If, on the other hand, the character is made into a non-terminating macro
+character (by passing non-\nil{} as the third argument), the expression
+\texttt{afoobar} would trigger the function, yet \texttt{fooabar} would not.
+Instead, the latter expression would return \texttt{fooabar} as a single token.
+
+As can be seen in the next section, it can be desirable to make a character into
+a macro character without having it’s function ever be called in a correct
+program.  This is the case when using delimited lists, as will be seen in the
+example in section \ref{sec:example}.
+
+\subsection{\fun{get-macro-character}}
+\label{subsec:get-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/get-macro-character
+    (char &optional
+          (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+This function retrieves the function set in the given (or current) readtable for
+the given character.  It is pretty much the opposite of
+\fun{set-macro-character}.  It returns a list of two elements, the function in
+question and a flag denoting whether the character in question is a terminating
+(\nil{}) or non-terminating \tee{}.\footnote{In \cl{} this function returns
+  multiple (two) values; the primary value being the corresponding function (if
+  any), and the second value being a flag denoting whether the character is a
+  terminating or non-terminating macro character.}
+
+\subsection{\fun{make-dispatch-macro-character}}
+\label{subsec:make-dispatch-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/make-dispatch-macro-character
+    (char &optional non-terminating-p
+          (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+This function creates a new dispatching macro character.  Macro characters
+involving dispatching consist of a character which begins a sequence, optionally
+a decimal number, and then another (non-decimal) character which is mapped to a
+function supplied by the user.  While the only dispatching macro character in
+\cl{}, the hash-sign (\texttt{\#}), is also the only non-terminating macro
+character, the two concepts are completely unrelated.  In fact, in \elr{},
+\texttt{\#} is a terminating character, as it is in standard \el{}.
+
+\subsection{\fun{set-dispatch-macro-character}}
+\label{subsec:set-dispatch-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/set-dispatch-macro-character
+    (disp-char sub-char new-function &optional
+               (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+As with \fun{set-macro-character}, takes a character (in this case two, namely a
+dispatching and a sub character), a function, and optionally a readtable.
+Associates the given character sequence with the given function.  Always returns
+\tee{}.
+
+\subsection{\fun{get-dispatch-macro-character}}
+\label{subsec:get-dispatch-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/get-dispatch-macro-character
+    (disp-char sub-char &optional
+               (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+As with \fun{get-macro-character}, this function returns the function (if any)
+associated with the given macro character.  Unlike \fun{get-macro-character}
+however, it only returns one value, as dispatched macro characters cannot be
+non-terminating.  However, the \texttt{dispatching} (i.e. first) character can
+(and in \cl{} also is).
+
+\section{An Example}
+\label{sec:example}
+
+In this section an example of a read macro is presented and discussed in detail.
+It is a fairly simple, yet useful macro.  As mentioned earlier in this thesis
+(see section \ref{sec:motivation}), Clojure---along with many other
+languages---features a concise notation for hash-tables, namely surrounding a
+list of keys and values with curly braces.  Such notation is implemented and
+shown in this example.  Listing \ref{code:hash-table} shows the code.
+
+\begin{lstlisting}[style=lispcode,label={code:hash-table},caption={Create syntax
+    for hash-tables.},numbers=left]
+(defun el-reader//ht (&rest args)
+  "Create and return a hashtable.
+
+Keys and values are given alternating in args."
+  (let ((h (make-hash-table)))
+    (cl-loop for (key value) on args by #'cddr
+             do (if (and key value) (puthash key value h)
+                  (error "Odd number of arguments passed")))
+    h))
+
+(defun el-reader//read-hash-table (stream _char)
+   (cl-values
+    (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
+      (if (= (mod (length k-v) 2) 1)
+          (error "Invalid syntax: {}")
+        `(el-reader//ht ,@k-v)))))
+
+(el-reader/set-macro-character ?\{ #'el-reader//read-hash-table)
+
+(cl-multiple-value-bind (fun _term)
+    (el-reader/get-macro-character ?\))
+  (el-reader/set-macro-character ?\} fun))
+\end{lstlisting}
+
+As with regular macros, it is important to remember which code is run at which
+time.  The code shown in the function \fun{read-hash-table} is run at read time,
+namely as soon as \Read{} encounters an opening curly brace.
+
+As the proposed syntax consists of a list of alternating keys and values
+directly surrounded by curly braces, the obvious tool to reach for is
+\fun{read-delimited-list}.  This function is passed a character to look out for
+(which is also a macro character) as well as a stream and whether the call is
+performed from within a recursive call to read.  While \elr{} (currently)
+completely ignores this argument, it is a good idea to always set this to
+\tee{}, if only for the sake of consistency with \cl{}.
+
+The result of the call to \fun{read-delimited-list} is---not surprisingly---a
+list of all expressions between the curly braces.  As it is expected that the
+user passes alternating keys and values, it would be an error to place an odd
+number of expressions between the braces, so the next line checks for this
+possibility.  Remember that the expressions given by the user have \texttt{not}
+been evaluated.  They have merely been read!  If the user places an unquoted
+symbol as a key, the symbol itself is returned.  Only in the next step something
+possibly unexpected would happen.  If the number of expressions is indeed odd,
+an error is signaled, which occurs at read-time.  This means that informing the
+user of the error in the program is not delayed until runtime, as it is so often
+the case in dynamic languages like Lisp.  Instead the user is informed
+immediately.
+
+The last step (which is only run in case an even number of expressions was read)
+is seemingly innocuous, yet may hold some surprises for users not particularly
+familiar with (either kind of) macros.  The backquote at the beginning of the
+expression---itself a read macro---represents a sort of template.  It does
+\texttt{not} execute the form (i.e. does not call the function
+\fun{el-reader//ht}), but returns a list.  The first element of the list is the
+symbol \sym{el-reader//ht} (i.e. the symbol was implicitly quoted).  As the next
+expression begins with a comma (,)---more specifically a comma followed by an @
+sign---the expression is inserted (spliced) into the template.  If for example
+the user entered the form \texttt{\{:foo "bar"\}}, \fun{read-delimited-list} would
+return the list \texttt{(:foo "bar")}.  Given the fact that said list is stored
+in the variable \sym{k-v}, and that the number of elements is even, consider the
+following evaluation:
+
+\begin{lstlisting}[style=lispinline]
+`(el-reader//ht ,@k-v)
+=> (el-reader//ht :foo "bar")
+\end{lstlisting}
+
+Note that the list form shown as the result above is \emph{not evaluated}!  It
+is returned as a Lisp object which just happens to be a list.  It is the result
+of our macro function, and thus also the result of a call to \Read{}.  The
+runtime effect of the given code is that a the function \fun{el-reader//ht} will
+be called with the arguments \texttt{:foo} and \texttt{"bar"}, thus constructing
+a hash table at runtime.
+
+Note that it is perfectly legal to perform code evaluation at readtime, just as
+regular macros may perform evaluations at compile-time.  This may have all sorts
+of reasons, performance being one of them.  This was not done here, as the user
+shall have the possibility to use variables which are only available at
+runtime.  Had the code not said \texttt{`(el-reader//ht ,@k-v)} but
+\texttt{(apply \#'el-reader//ht k-v)}, the syntactic construct would have been
+more in line of an \el{} vector, i.e. variable references would not have been
+looked up, but would have been quoted instead (i.e. \texttt{\{:foo bar}\} would
+always result in a table where the key \sym{:foo} was mapped to the symbol
+\sym{bar}, regardless of whether \sym{bar} was bound---and if so to what).
+
 \section{The readtable}
 \label{subsec:readtable}
 
@@ -2566,18 +2832,7 @@ readtable from scratch.
 
 Here be dragons.
 
-\section{Stream Types}
-\label{sec:stream-types}
-
-
-
-% \chapter{References}
-% \label{sec:references}
-% \begin{description}
-% \item[{srfi-10}] \url{http://srfi.schemers.org/srfi-10/srfi-10.html}
-% \item[{dynamic scope misnomer}] \url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html}
-% \end{description}
-
+\vfill
 \pagebreak
 \bibliographystyle{abbrvdin}
 \bibliography{references}
