@@ -110,7 +110,6 @@
 \begin{document}
 
 \maketitle
-\tableofcontents
 
 \begin{abstract}
   This thesis discusses the design and implementation of a proof of concept for
@@ -143,8 +142,115 @@
   the original part unavailable.
 \end{abstract}
 
+\tableofcontents
+
+\chapter{Introduction}
+\label{chap:introduction}
+
+In this thesis a proof of concept for a new reader for \emacs{} is discussed.
+The reader (called \elr{}) provides \cl{}-style reader macros, which allow the
+user of the language to extend the syntax of the language, without leaving the
+language, or even restarting the program.
+
+The advantage of such a system is that new syntactic constructs may be
+implemented without the restriction of merely re-using existing ones, as would
+be the case using operator overloading.  Also, several completely
+different---even incompatible---syntaxes may coexist within one program, as long
+as their uses do not overlap.  To a certain extent these syntaxes can be
+composable, yet in such a case caution is advised.
+
+The outline of this thesis (apart from this introduction) is as follows.
+
+Chapter \ref{chapter:emacs-intro} provides a short history of how \emacs{} came
+into being, as the language extended here (\el{}) is part of \emacs{}.  Other
+Emacs variants (also known as \emph{emacsen}) are not discussed here.
+
+Chapter \ref{chapter:lisp-hist} gives a brief history of the conception and further
+development of Lisp and its dialects.
+
+Chapter \ref{chapter:lisp-special} shows how Lisps in general differ from other
+programming languages.  This chapter is especially important for people
+unfamiliar with Lisps in general, yet will hopefully also be of interest to the
+more casual lisper.
+
+Chapter \ref{chapter:lisp-basics} gives a short introduction to programming in
+Lisp, as Lisp knowledge will make the rest of this thesis much easier to
+understand.
+
+Armed with the knowledge of previous chapters, chapter \ref{chapter:motivation}
+finally gives some motivation of why one would want to allow users to extend the
+syntax of a language.  As with all features, taste is advised in doing so.
+
+Chapter \ref{chapter:repl-reader} discusses how the reader may be replaced and
+what the pros and cons of each approach are.
+
+Chapter \ref{chapter:reader-printer} discusses what a reader actually is and how
+it differs from the more traditional parsers found in other programming
+languages.
+
+Finally chapter \ref{chapter:api-overview} gives an overview on how to use the
+reader presented in this thesis, including some explanations often lacking in
+tutorials found both on the web, and in books.
+
+\section{Lexical conventions}
+\label{sec:lexical-conv}
+
+Throughout this thesis, the names of functions, classes, variables and plain
+symbols are written in a \texttt{monospace} font.  Code is mostly placed in
+boxes and listings, but the occasional short expression may be put between
+double quotes.  Single characters embedded into the text are surrounded by
+single quotes.  Note that only the quote signs as used in source code of
+virtually all programming languages (i.e. the characters ‚'’ and ‚"’) are to be
+taken as part of such an expression or character.
+
+When functions are presented, their signature is shown too.  Figure
+\ref{sig:example} shows an example.
+
+\begin{lstlisting}[style=lispcode,label={sig:example},caption={Example function
+signature},numbers=left]
+(el-reader/read (&optional INPUT-STREAM
+                           (EOF-ERROR-P T)
+                           EOF-VALUE
+                           RECURSIVE-P
+                           KEYS))
+\end{lstlisting}
+
+The parentheses denote a list.  The first element it the name of the function in
+question.  All other elements are either arguments or qualifiers for further
+arguments.  One such qualifier is ``\&optional''.  It means that all further
+arguments are optional.  The following arguments may either be an argument name,
+or a list.  If a name is given, the value will be \nil{} if the caller does not
+supply an argument.  In case of a list, the first element of said list must be a
+name, while the second may be an arbitrary expression which will be evaluated as
+the function is called.  The result of said expression will be bound to the
+argument.\footnote{Note that this is a consequence of using the \texttt{CL}
+  package distributed with \emacs{}, which provides some \cl{} emulation.  The
+  list may also provide another value which may be used by the called function
+  to determine whether an argument was supplied or not, yet this is not used in
+  this thesis.  The appropriate info page discusses these features in more
+  depth.}  Another argument is ``\&rest''.  This must always be followed by
+exactly one argument name.  It means that all further arguments given---which
+may be zero or more---are collected into a list and bound to this argument.
+
+As \el{} does not provide any namespace support worth mentioning, it is sadly
+necessary to prefix all names one uses to avoid clashes.  As the package
+developed for this thesis has been named ``el-reader'', this is also used as a
+prefix.  Many \el{} packages simply delimit prefixes with a dash for public
+variables or functions and a double dash for private ones, yet in this package a
+single and double slash are used for this purpose as it is more easily
+distinguished from the other dashes used to separate names.
+
+Special (a.k.a. dynamic, a.k.a. global) variables are---by
+convention---surrounded by asterisks.
+
+Hence, every symbol which begins with \sym{el-reader/} or \sym{*el-reader/}, not
+followed by a second immediate slash, denotes a public variable or function.
+
+To make the names used in this thesis shorter, the full name is used once, and
+from then on the part after the slash(es) is used.
+
 \chapter{A brief history of (GNU) Emacs}
-\label{sec:emacs-intro}
+\label{chapter:emacs-intro}
 
 Emacs was at first a text editor at MIT, written in machine language and
 extensible with an interpreted command language.  The interpreter was taken from
@@ -189,7 +295,7 @@ these methods were used for the code in this thesis, said code requires at least
 a pretest version of Emacs\cite{emacs-pretest}.
 
 \chapter{A brief history of Lisp}
-\label{sec:lisp-hist}
+\label{chapter:lisp-hist}
 
 Pinpointing Lisps exact moment of birth is rather difficult, as it is often the
 case with Ideas which take some time to develop.  John McCarthy published a
@@ -199,9 +305,9 @@ notation among others, from Alonzo Church’s $\lambda$-calculus are used.
 The gist of the paper is that McCarthy devised a theoretic system to represent
 functions in programs.  This was originally meant as a theoretic foundation,
 yet, as McCarthy writes in his retrospective notes on Lisp history
-\cite{lisp-hist}: “S.R. Russell noticed that eval could serve as an interpreter
-for LISP, promptly hand coded it, and we now had a programming language with an
-interpreter.”
+\cite{lisp-hist}: “S.R. Russell\footnote{One of his students at the time.}
+noticed that eval could serve as an interpreter for LISP, promptly hand coded
+it, and we now had a programming language with an interpreter.”
 
 While it may have been an accident that Lisp got an implementation, thus
 becoming an actual programming language at the time that it did, the foundation
@@ -215,8 +321,8 @@ time, even though it was very slow.  It was slow compared to other languages of
 the time, namely machine language/assembly and FORTRAN.  It was also slow simply
 because compiler technology was not nearly as advanced as it is today.
 
-What makes Lisp special is discussed in greater detail in section
-\ref{sec:lisp-special}. 
+What makes Lisp so expressive is discussed in greater detail in section
+\ref{chapter:lisp-special}. 
 
 \begin{comment}
   Paul Graham nicely listed 9 particularly important ideas: \cite{pg-lisp-diff}
@@ -258,15 +364,15 @@ What makes Lisp special is discussed in greater detail in section
     When a language is made entirely of expressions, you can compose expressions
     however you want. You can say either (using Arc syntax)
 
-  \begin{lstlisting}[style=lispinline]
-    (if foo (= x 1) (= x 2))
-  \end{lstlisting}
+\begin{lstlisting}[style=lispinline]
+(if foo (= x 1) (= x 2))
+\end{lstlisting}
 
   or
 
-  \begin{lstlisting}[style=lispinline]
-    (= x (if foo 1 2))
-  \end{lstlisting}
+\begin{lstlisting}[style=lispinline]
+(= x (if foo 1 2))
+\end{lstlisting}
 
 \item[A symbol type] Symbols differ from strings in that you can test equality
   by comparing a pointer.
@@ -317,7 +423,7 @@ This is typically called an abstract syntax tree (AST)\footnote{The exact
   are beyond the scope of this thesis.}.  Lisp, being a dynamically typed
 language, allows the syntax tree to be particularly simple.  While a tree in a
 statically typed language may need structures to differentiate between a
-function call (which has a name and one or more arguments), and a number
+function call (which has a name and zero or more arguments), and a number
 literal, in Lisp one can simply use dynamic typing.  This way, numbers, strings,
 symbols etc. can be put directly in place, while nested lists provide the tree
 structure needed.
@@ -325,12 +431,21 @@ structure needed.
 As Lisp programs can be represented with data structures which Lisp provides,
 higher-order programs became possible quite early in the history of computers.
 Lisps syntax and its relationship to metaprogramming is discussed in further
-detail in section \ref{sec:lisp-special}.
+detail in section \ref{chapter:lisp-special}.
+
+As Lisp is rather a set of ideas on how a language should be, rather than a
+single language, different Lisp dialects were developed.  Among the most well
+known are \cl{} and Scheme.  Another rather recent addition to the Lisp family
+of languages is Clojure, which is rather important, as it is very different from
+other Lisps, especially \cl{}.  Another Lisp dialect which is somewhat
+widespread is \el{}, which is rather similar to \cl{} is some respects.  This
+language is used---as the name suggests---as an extension language for \emacs{}
+and some other Emacs variants.
 
 \chapter{What makes Lisp special}
-\label{sec:lisp-special}
+\label{chapter:lisp-special}
 
-As outlined at the end of section \ref{sec:lisp-hist}, Lisp code can be
+As outlined at the end of section \ref{chapter:lisp-hist}, Lisp code can be
 represented in its own data structures.  This sets it apart from most (if not
 all) mainstream languages in use today. As this is vital to the rest of this
 thesis, it is discussed in detail here.
@@ -359,7 +474,7 @@ like this:
 % elements, together with prefix notation, it may as well look like this:
 
 \begin{lstlisting}[style=lispinline]
-  (+ a (* b c))
+(+ a (* b c))
 \end{lstlisting}
 
 Given that Lisp syntax is given as nested lists, symbols and prefix notation, it
@@ -393,8 +508,8 @@ the expansion of said macro.  Listing \ref{code:increment} is taken from the
 
 \begin{lstlisting}[style=lispcode,caption={Increment as a
       macro.},label={code:increment}]
-  (defmacro inc (var)
-        (list 'setq var (list '1+ var)))
+(defmacro inc (var)
+  (list 'setq var (list '1+ var)))
 \end{lstlisting}
 
 This macro is called with \texttt{(inc x)} where \sym{x} is an already existing
@@ -570,10 +685,10 @@ addresses the issue for \emacs{}.
 Not many users of \cl{} seem to use this set of features, as free and good
 introductory material on the topic is quite lacking on the web, although
 Graham’s On Lisp \cite{on-lisp} does feature a short chapter on read
-macros.\todo{Add a ref to the section which details the lisp reader.}
+macros.
 
 \chapter{Lisp Basics}
-\label{subsec:lisp-basics}
+\label{chapter:lisp-basics}
 
 This section is only intended as a short recap of what Lisp syntax is, and how
 it relates to the reader.  For more details, a Lisp textbook is more
@@ -582,7 +697,7 @@ appropriate.  A good reference for \el{} is found at \cite{elisp-reference}.
 Lisp syntax never directly describes control flow, function definitions, or
 other actions, but merely data.  If the described data consists of lists and
 symbols, it will later on be treated as code, which can be compiled and
-executed.\todo{Possibly show some Lisp examples.}
+executed.
 
 Such data structures can represent code by having a list with an ``action'',
 which may be a special form, a macro or a function, as its first element.  Any
@@ -593,7 +708,7 @@ As an example, here is some code which performs a variable binding with
 and a function call to \fun{message}.
 
 \begin{lstlisting}[style=lispinline]
-  (let ((var 5)) (setf var "Hello") (message "%s" var))
+(let ((var 5)) (setf var "Hello") (message "%s" var))
 \end{lstlisting}
 
 When Lisp source code is processed, it goes through three distinct stages:
@@ -721,7 +836,7 @@ as one realizes that \texttt{\#} is a dispatching macro character\todo{Add a
 \texttt{\#b}, \texttt{\#o} and \texttt{\#x} may be implemented as read macros.
 
 \chapter{Motivation}
-\label{sec:motivation}
+\label{chapter:motivation}
 Users of other Lisp dialects, especially of \cl{}, have enjoyed the possibility
 to modify the syntax they use to write programs for a long time.  This
 possibility provides a huge benefit in the course of evolving a language, as
@@ -965,7 +1080,7 @@ Here is how it is used:
 \end{lstlisting}
 
 \chapter{Replacing Emacs’ built-in reader}
-\label{sec:repl-reader}
+\label{chapter:repl-reader}
 
 When contemplating the replacement of such a critical and internal part of the
 implementation of a programming language, one must find a way to do so.  The
@@ -1147,10 +1262,10 @@ discussed in detail in section \ref{subsec:streams}.
 % The fourth category is the subject of this thesis.  Before discussing how an
 % extensible reader works, it is necessary to first understand what a reader does,
 % whether it is extensible or not.  This is discussed in section
-% \ref{sec:reader-printer}.
+% \ref{chapter:reader-printer}.
 
 \chapter{Reader and Printer}
-\label{sec:reader-printer}
+\label{chapter:reader-printer}
 
 \section{Readers vs. Parsers}
 \label{subsec:readers-vs-parsers}
@@ -1236,8 +1351,8 @@ list, yet between the last and second to last elements a sole dot is inserted,
 like so:
 
 \begin{lstlisting}[style=lispinline]
-  (foo bar spam . eggs)
-  (spam . eggs)
+(foo bar spam . eggs)
+(spam . eggs)
 \end{lstlisting}
 
 The first example constructs a so called \emph{non-proper} list; such a list
@@ -1530,15 +1645,15 @@ The reader consists of 10 numbered steps:
   One way of obtaining such a symbol is by calling \texttt{intern}---which takes
   a string---at runtime:
 
-  \begin{lstlisting}[style=lispinline]
-    (intern "(foo)")
-  \end{lstlisting}
+\begin{lstlisting}[style=lispinline]
+(intern "(foo)")
+\end{lstlisting}
 
   The alternative is using escaping to allow this name at read time:
   
-  \begin{lstlisting}[style=lispinline]
-    \(foo\)
-  \end{lstlisting}
+\begin{lstlisting}[style=lispinline]
+\(foo\)
+\end{lstlisting}
 \item If \texttt{X} is a multiple escape character, a new empty token is begun
   and control is transferred to step 9.  Note that the escape character itself
   is consumed from the stream.
@@ -1780,8 +1895,8 @@ comments and whitespace may lie in between the current position and the closing
 paren:
 
 \begin{lstlisting}[style=lispinline]
-  (foo ;; comment
-    bar)
+(foo ;; comment
+ bar)
 \end{lstlisting}
 
 This is why the function \fun{read-delimited-list} exists.
@@ -1807,8 +1922,8 @@ type, which is not normally part of the public API.
 Its signature is as follows:
 
 \begin{lstlisting}[style=lispinline]
-  (el-reader/read-delimited-list char &optional stream
-    recursive-p)
+(el-reader/read-delimited-list char &optional stream
+                               recursive-p)
 \end{lstlisting}
 
 As before, the discussion of how the function works will be followed by the code
@@ -1823,7 +1938,7 @@ used.
 The following steps constitute the algorithm for \fun{read-delimited-list}:
 
 \begin{enumerate}
-\item The character \sym{C} is obtained by \fun{el-reader/peek-char}.
+\item The character \sym{C} is obtained by \fun{peek-char}.
 \item \label{loop-step}
   If \sym{C} matches \sym{char} (i.e. the character to terminate the list)
   the character is consumed from the list.  Finally, the reversed list of read
@@ -1833,7 +1948,7 @@ The following steps constitute the algorithm for \fun{read-delimited-list}:
   \begin{enumerate}
   \item If \sym{C} is invalid, a \sym{'reader-error} is signaled.
   \item If \sym{C} is whitespace, \sym{C} is consumed from the input stream and
-    a new character is read with \fun{el-reader/peek-char} and stored in
+    a new character is read with \fun{peek-char} and stored in
     \sym{C}.
   \item If \sym{C} is a constituent, macro character (terminating or
     non-terminating), or an escape character (single or multiple), \Read{} is
@@ -1951,7 +2066,7 @@ Thus, the algorithm to read such a list is as follows:
 \item Set the global variable \sym{*el-reader//allow-single-dot-symbol} to
   \sym{t}, which prevents subsequent calls to \Read{} to signal an error when
   a dot is read.
-\item Read a list using \fun{el-reader/read-delimited-list} which ends with a
+\item Read a list using \fun{read-delimited-list} which ends with a
   close paren (see section \ref{subsec:read-delimited-list} for details).
 \item \label{lbl:read-lisp-list-step-3}
   Check for these three conditions:
@@ -2029,7 +2144,7 @@ the other hand works as expected, and returns a circular list of repeating
 \texttt{a} \texttt{b} and \texttt{c} symbols.
 
 \begin{lstlisting}[style=lispinline]
-  '#1=(a b c . #1#)
+'#1=(a b c . #1#)
 \end{lstlisting}
 
 In order to implement this, it is necessary to know whether a call to \Read{} is
@@ -2268,18 +2383,18 @@ which takes an ``A'' and a ``B'' and returns a ``C''.  ``(A -> B) -> C'' on the
 other hand represents a function which takes a function from an ``A'' to a ``B''
 and returns a ``C''.
 
-So the type of \fun{el-reader//parse-seq} is:
+So the type of \fun{parse-seq} is:
 
 \begin{lstlisting}[style=lispinline]
-  (token -> pos -> result) -> (token -> pos -> result)
-  ... -> (token -> pos -> result)
+(token -> pos -> result) -> (token -> pos -> result)
+... -> (token -> pos -> result)
 \end{lstlisting}
 
 On the other hand, functions which directly parse an entity have the following
 signature:
 
 \begin{lstlisting}[style=lispinline]
-  (token -> pos -> result)
+(token -> pos -> result)
 \end{lstlisting}
 
 Thus, functions which parse an entity may be passed to functions which combine
@@ -2290,7 +2405,7 @@ an entity based on some input.  One such function is
 \fun{el-reader//parse-single-char}, which has the following signature:
 
 \begin{lstlisting}[style=lispinline]
-  char -> (token -> pos)
+char -> (token -> pos)
 \end{lstlisting}
 
 This means that it takes a single character as an argument and returns a
@@ -2312,6 +2427,45 @@ negative), one can construct such a function using \fun{parse-seq} and
 
 Using this form of function combination it is possible to write parts of the
 parser in a fairly declarative form without even having to resort to macros.
+
+\subsection{Dispatching Macro Characters}
+\label{subsec:dispatching-macro-chars}
+
+There is another algorithm with directly user visible consequences, which does
+not directly belong to the reader: dispatching macro characters.
+
+These are macro characters which themselves provide a sort of ``sub macro
+characters''.  This means that a dispatching macro character does not by itself
+do much.  It merely checks the next characters to check if a previously defined
+sub character is encountered.  If this is the case, the appropriate function is
+called.  In addition an optional decimal number between the dispatching char and
+the sub char is read and passed (if present, \nil{} otherwise) to the function.
+Both in \cl{} and \el{}, only one such character exists in standard
+syntax.\footnote{While it is not exactly correct to call such a character a
+  dispatching macro character in \el{}, as \el{} does not even have macro
+  characters in the actual sense of the word, it is a dispatching macro
+  character in \elr{}.}  The character \texttt{\#} is such a dispatching macro
+character.  Note that while this character is also a \emph{non-terminating}
+macro character in \cl{}, it is not in \elr{}, as the same character terminates
+a token in standard \el{}.
+
+While the mechanism of the implementation is different from regular macro
+characters, to a user aiming to employ read macros, they appear to work much the
+same.  The purpose of dispatching macro characters is of course to provide a way
+to allow more possible macro characters, without having to worry about clashes.
+For instance, in both \cl{} and \el{}, curly braces have no special meaning.
+This means that they may be part of a symbols name, or even provide the whole
+name.  In both of these languages, the expression \texttt{\{\}} yield a symbol.
+The advantage of using a dispatching character is that the dispatch
+character may not be used as a part of a symbol.\footnote{Note that in \cl{} it
+  may be part of a token for a symbol; it is merely illegal to start a symbol
+  with a \texttt{\#}.  This is not because \texttt{\#} is a dispatching
+  character, but because it is non-terminating.}
+
+The reason this algorithm is not directly part of the reader, is because it
+itself is implemented as a regular read macro.  The function
+\fun{make-dispatch-macro-character} registers the given character to be a macro
+character and associates a predefined function to it.
 
 \section{Datastructures}
 \label{sec:datastructures}
@@ -2378,7 +2532,7 @@ The readtable also has a slot which holds a mapping for dispatching macro
 characters.  By default this table only has one key: `\#'.  The corresponding
 value is in turn also a hash-table which in turn maps characters to functions.
 
-The function \fun{el-reader/make-dispatch-macro-character} associates a function
+The function \fun{make-dispatch-macro-character} associates a function
 with the dispatching character.  This function first tries to read a decimal
 number from the input stream.  This does \texttt{not} use \Read{}, but uses
 \fun{el-reader//getch} instead.  As soon as \fun{getch} does not return a
@@ -2476,16 +2630,15 @@ state.  Functions need a wrapper which does not hold any additional data, but
 provides a type on which a method may dispatch.
 
 The other generic function needed provides the actual mechanism of fetching and
-restoring a character, named \fun{el-reader/getch}.  This function
-accepts---besides an object returned from \fun{el-reader//get-getch-state}---an
-optional character.  If no character is given, a character is read from the
-steam and the position of the stream is advanced by one.  If a char is given it
-is returned to the stream and the position is decreases.  The code in the actual
-reader assumes that only one character may be put back, and further assumes that
-only characters which have been read may be returned.  This is because the
-reader does not need more capabilities and also works on input sources which
-shall not change or are even read only.  Calling \Read{} on a buffer should not
-mutate said buffer.
+restoring a character, named \fun{getch}.  This function accepts---besides an
+object returned from \fun{get-getch-state}---an optional character.  If no
+character is given, a character is read from the steam and the position of the
+stream is advanced by one.  If a char is given it is returned to the stream and
+the position is decreases.  The code in the actual reader assumes that only one
+character may be put back, and further assumes that only characters which have
+been read may be returned.  This is because the reader does not need more
+capabilities and also works on input sources which shall not change or are even
+read only.  Calling \Read{} on a buffer should not mutate said buffer.
 
 \subsection{Structures for the recursive descent parser}
 \label{subsec:parser-structs}
@@ -2526,7 +2679,7 @@ While the slots \sym{success} \sym{token} \sym{pos} \sym{newpos} and
 \sym{metadata} are only needed for the parsing, i.e. \emph{recognizing} a given
 structure, \sym{result} is at the heart of actually producing a value.  This is
 why every parsing function directly or indirectly returns such an outer
-\sym{result}.  Some functions take one or more \sym{el-reader//result} objects
+\sym{result}.  Some functions take one or more \sym{result} objects
 and combine their \sym{result} \emph{slots}.  The function \fun{parse-seq} does
 this by putting objects in a list, but several functions rather create objects
 of the type \sym{el-reader//syntax-element} or a derivative.
@@ -2534,9 +2687,9 @@ of the type \sym{el-reader//syntax-element} or a derivative.
 \subsubsection{The \sym{syntax-element} type}
 \label{subsubsec:syntax-element}
 
-Many functions put an object of type \sym{el-reader//syntax-element} or one of
+Many functions put an object of type \sym{syntax-element} or one of
 its descendants into the \sym{result} slot of the returned
-\sym{el-reader//result} object.  In the most simple case such an object merely
+\sym{result} object.  In the most simple case such an object merely
 contains of a \sym{value} slot, but descendants may add additional slots.
 
 These are all syntax elements used are the following (as far as not mentioned
@@ -2568,16 +2721,18 @@ otherwise, all types descend from \sym{syntax-element}.
 \end{description}
 
 \chapter{API overview}
-\label{sec:api-overview}
+\label{chapter:api-overview}
 
-The API of \elr{} takes lots of inspiration from the corresponding API in
-\cl{}, as the two languages are sufficiently similar, and \cl{} has a very
-mature library.  Also, it may be expected that some \el{} developers are
-familiar with \cl{} read macros.  Those who are not may benefit from the
-similarity, as learning and reference material on \cl{} read macros seems to be
-more widely available than for any other Lisp, probably due to its stable
-standard.  \footnote{Paul Grahams book ``On Lisp''\cite[p.~224]{on-lisp}
-  contains a chapter explaining both regular macros and read macros.}
+The API of \elr{} takes lots of inspiration from the corresponding API in \cl{},
+as the two languages are sufficiently similar, and \cl{} has a very mature
+library.\footnote{As the two libraries are so similar, often eliding the
+  \sym{el-reader/} prefix yields a name present in \cl{}.}  Also, it may be
+expected that some \el{} developers are familiar with \cl{} read macros.  Those
+who are not may benefit from the similarity, as learning and reference material
+on \cl{} read macros seems to be more widely available than for any other Lisp,
+probably due to its stable standard.  \footnote{Paul Grahams book ``On
+  Lisp''\cite[p.~224]{on-lisp} contains a chapter explaining both regular macros
+  and read macros.}
 
 The intention of this chapter is to serve as a short user manual/tutorial on how
 to use read macros.  It should not be necessary to have read the rest of this
@@ -2588,7 +2743,8 @@ At first, the general outline of how to setup a read macro will be discussed.
 Afterwards an example will be implemented, which will explain why the steps are
 done in the way they are.  The last section of this chapter will provide a short
 reference.  For the most part, any \cl{} reference will do, as the APIs are
-deliberately similar.
+deliberately similar.  Finally the most important differences with \cl{} will be
+summarized.
 
 \section{Outline}
 \label{sec:outline}
@@ -2598,13 +2754,11 @@ the readtable.  This structure holds all information from the syntax types and
 traits of characters, to the mapping of characters to functions.
 
 There is always exactly one readtable in effect: the structure stored in the
-special (i.e. dynamic) variable \sym{*el-reader/readtable*}\footnote{In \cl{}
-  this variable is simply called \sym{*readtable*}.  Oftentimes stripping
-  \sym{el-reader/} or \sym{el-reader//} from the name yields a name used in
-  \cl{}.}.  This table may either be modified in place, thus affecting all code
-under the same binding (possibly all code in the Emacs process, if the table is
-never rebound), or may be rebound, possibly with a copy of the existing table.
-Such a copy may be acquired with the function \fun{el-reader/copy-readtable}.
+special (i.e. dynamic) variable \sym{*readtable*}.  This table may either be
+modified in place, thus affecting all code under the same binding (possibly all
+code in the Emacs process, if the table is never rebound), or may be rebound,
+possibly with a copy of the existing table.  Such a copy may be acquired with
+the function \fun{el-reader/copy-readtable}.
 
 For those rare cases in which a completely new table is needed, it is also
 possible to create a somewhat empty table with \fun{make-instance}.  A new table
@@ -2616,116 +2770,23 @@ mapping from characters to numbers used in number conversion (i.e. `0' maps to
 
 After having chosen which table to use and modify, it is time to actually modify
 the table.  This is done---as mentioned in section \ref{subsec:readtable-class}
-(\nameref{subsec:readtable-class})---with the following functions:
+(\nameref{subsec:readtable-class})---with the following functions, documented in
+section \ref{sec:api-reference}:
 
 \begin{itemize}
-\item \fun{el-reader/set-macro-character} 
-\item \fun{el-reader/get-macro-character}
-\item \fun{el-reader/make-dispatch-macro-character}
-\item \fun{el-reader/set-dispatch-macro-character}
-\item \fun{el-reader/get-dispatch-macro-character}
+\item \fun{set-macro-character} 
+\item \fun{get-macro-character}
+\item \fun{make-dispatch-macro-character}
+\item \fun{set-dispatch-macro-character}
+\item \fun{get-dispatch-macro-character}
 \end{itemize}
-
-\subsection{\fun{set-macro-character}}
-\label{subsec:set-macro-character}
-
-\begin{lstlisting}[style=lispinline]
-(cl-defun el-reader/set-macro-character
-    (char new-function &optional
-          non-terminating-p
-          (readtable *el-reader/readtable*)))
-\end{lstlisting}
-
-This function is used to set a given character to be a macro character.  As can
-be seen in the last argument, a readtable may be given, but if it is omitted,
-the current table is used.  The macro character is associated with the given
-function (\fun{new-function}).  This means that \Read{} calls said function with
-the current input stream and said macro character, in that order.  Another
-important consequence of making a character a (terminating) macro character is
-that it now delimits tokens.  If for instance one were to make `a' a macro
-character, the expression \texttt{fooabar} would yield the token \texttt{foo}.
-Another read would trigger the macro character.
-
-If, on the other hand, the character is made into a non-terminating macro
-character (by passing non-\nil{} as the third argument), the expression
-\texttt{afoobar} would trigger the function, yet \texttt{fooabar} would not.
-Instead, the latter expression would return \texttt{fooabar} as a single token.
-
-As can be seen in the next section, it can be desirable to make a character into
-a macro character without having it’s function ever be called in a correct
-program.  This is the case when using delimited lists, as will be seen in the
-example in section \ref{sec:example}.
-
-\subsection{\fun{get-macro-character}}
-\label{subsec:get-macro-character}
-
-\begin{lstlisting}[style=lispinline]
-(cl-defun el-reader/get-macro-character
-    (char &optional
-          (readtable *el-reader/readtable*)))
-\end{lstlisting}
-
-This function retrieves the function set in the given (or current) readtable for
-the given character.  It is pretty much the opposite of
-\fun{set-macro-character}.  It returns a list of two elements, the function in
-question and a flag denoting whether the character in question is a terminating
-(\nil{}) or non-terminating \tee{}.\footnote{In \cl{} this function returns
-  multiple (two) values; the primary value being the corresponding function (if
-  any), and the second value being a flag denoting whether the character is a
-  terminating or non-terminating macro character.}
-
-\subsection{\fun{make-dispatch-macro-character}}
-\label{subsec:make-dispatch-macro-character}
-
-\begin{lstlisting}[style=lispinline]
-(cl-defun el-reader/make-dispatch-macro-character
-    (char &optional non-terminating-p
-          (readtable *el-reader/readtable*)))
-\end{lstlisting}
-
-This function creates a new dispatching macro character.  Macro characters
-involving dispatching consist of a character which begins a sequence, optionally
-a decimal number, and then another (non-decimal) character which is mapped to a
-function supplied by the user.  While the only dispatching macro character in
-\cl{}, the hash-sign (\texttt{\#}), is also the only non-terminating macro
-character, the two concepts are completely unrelated.  In fact, in \elr{},
-\texttt{\#} is a terminating character, as it is in standard \el{}.
-
-\subsection{\fun{set-dispatch-macro-character}}
-\label{subsec:set-dispatch-macro-character}
-
-\begin{lstlisting}[style=lispinline]
-(cl-defun el-reader/set-dispatch-macro-character
-    (disp-char sub-char new-function &optional
-               (readtable *el-reader/readtable*)))
-\end{lstlisting}
-
-As with \fun{set-macro-character}, takes a character (in this case two, namely a
-dispatching and a sub character), a function, and optionally a readtable.
-Associates the given character sequence with the given function.  Always returns
-\tee{}.
-
-\subsection{\fun{get-dispatch-macro-character}}
-\label{subsec:get-dispatch-macro-character}
-
-\begin{lstlisting}[style=lispinline]
-(cl-defun el-reader/get-dispatch-macro-character
-    (disp-char sub-char &optional
-               (readtable *el-reader/readtable*)))
-\end{lstlisting}
-
-As with \fun{get-macro-character}, this function returns the function (if any)
-associated with the given macro character.  Unlike \fun{get-macro-character}
-however, it only returns one value, as dispatched macro characters cannot be
-non-terminating.  However, the \texttt{dispatching} (i.e. first) character can
-(and in \cl{} also is).
 
 \section{An Example}
 \label{sec:example}
 
 In this section an example of a read macro is presented and discussed in detail.
 It is a fairly simple, yet useful macro.  As mentioned earlier in this thesis
-(see section \ref{sec:motivation}), Clojure---along with many other
+(see section \ref{chapter:motivation}), Clojure---along with many other
 languages---features a concise notation for hash-tables, namely surrounding a
 list of keys and values with curly braces.  Such notation is implemented and
 shown in this example.  Listing \ref{code:hash-table} shows the code.
@@ -2787,7 +2848,7 @@ familiar with (either kind of) macros.  The backquote at the beginning of the
 expression---itself a read macro---represents a sort of template.  It does
 \texttt{not} execute the form (i.e. does not call the function
 \fun{el-reader//ht}), but returns a list.  The first element of the list is the
-symbol \sym{el-reader//ht} (i.e. the symbol was implicitly quoted).  As the next
+symbol \sym{ht} (i.e. the symbol was implicitly quoted).  As the next
 expression begins with a comma (,)---more specifically a comma followed by an @
 sign---the expression is inserted (spliced) into the template.  If for example
 the user entered the form \texttt{\{:foo "bar"\}}, \fun{read-delimited-list} would
@@ -2803,7 +2864,7 @@ following evaluation:
 Note that the list form shown as the result above is \emph{not evaluated}!  It
 is returned as a Lisp object which just happens to be a list.  It is the result
 of our macro function, and thus also the result of a call to \Read{}.  The
-runtime effect of the given code is that a the function \fun{el-reader//ht} will
+runtime effect of the given code is that a the function \fun{ht} will
 be called with the arguments \texttt{:foo} and \texttt{"bar"}, thus constructing
 a hash table at runtime.
 
@@ -2818,19 +2879,269 @@ looked up, but would have been quoted instead (i.e. \texttt{\{:foo bar}\} would
 always result in a table where the key \sym{:foo} was mapped to the symbol
 \sym{bar}, regardless of whether \sym{bar} was bound---and if so to what).
 
-\section{The readtable}
-\label{subsec:readtable}
-
-The only user visible data structure is the readtable.  In \cl{} this type has
-non-enumerable types, while in \elr{} it is defined in terms of
-\fun{defclass}, hence is enumerable and even has public attributes.  Most users
-will need none of these.  They are mostly needed when creating a completely new
-readtable from scratch.
+\section{Reference}
+\label{sec:api-reference}
 
 \section{Functions}
 \label{subsec:functions}
 
-Here be dragons.
+\subsection{set-macro-character}
+\label{subsec:set-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/set-macro-character
+    (char new-function &optional
+          non-terminating-p
+          (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+This function is used to set a given character to be a macro character.  As can
+be seen in the last argument, a readtable may be given, but if it is omitted,
+the current table is used.  The macro character is associated with the given
+function (\fun{new-function}).  This means that \Read{} calls said function with
+the current input stream and said macro character, in that order.  Another
+important consequence of making a character a (terminating) macro character is
+that it now delimits tokens.  If for instance one were to make `a' a macro
+character, the expression \texttt{fooabar} would yield the token \texttt{foo}.
+Another read would trigger the macro character.
+
+If, on the other hand, the character is made into a non-terminating macro
+character (by passing non-\nil{} as the third argument), the expression
+\texttt{afoobar} would trigger the function, yet \texttt{fooabar} would not.
+Instead, the latter expression would return \texttt{fooabar} as a single token.
+
+As can be seen in the next section, it can be desirable to make a character into
+a macro character without having it’s function ever be called in a correct
+program.  This is the case when using delimited lists, as will be seen in the
+example in section \ref{sec:example}.
+
+\subsection{get-macro-character}
+\label{subsec:get-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/get-macro-character
+    (char &optional
+          (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+This function retrieves the function set in the given (or current) readtable for
+the given character.  It is pretty much the opposite of
+\fun{set-macro-character}.  It returns a list of two elements, the function in
+question and a flag denoting whether the character in question is a terminating
+(\nil{}) or non-terminating \tee{}.\footnote{In \cl{} this function returns
+  multiple (two) values; the primary value being the corresponding function (if
+  any), and the second value being a flag denoting whether the character is a
+  terminating or non-terminating macro character.}
+
+\subsection{make-dispatch-macro-character}
+\label{subsec:make-dispatch-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/make-dispatch-macro-character
+    (char &optional non-terminating-p
+          (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+This function creates a new dispatching macro character.  Macro characters
+involving dispatching consist of a character which begins a sequence, optionally
+a decimal number, and then another (non-decimal) character which is mapped to a
+function supplied by the user.  While the only dispatching macro character in
+\cl{}, the hash-sign (\texttt{\#}), is also the only non-terminating macro
+character, the two concepts are completely unrelated.  In fact, in \elr{},
+\texttt{\#} is a terminating character, as it is in standard \el{}.
+
+\subsection{set-dispatch-macro-character}
+\label{subsec:set-dispatch-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/set-dispatch-macro-character
+    (disp-char sub-char new-function &optional
+               (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+As with \fun{set-macro-character}, takes a character (in this case two, namely a
+dispatching and a sub character), a function, and optionally a readtable.
+Associates the given character sequence with the given function.  Always returns
+\tee{}.
+
+\subsection{get-dispatch-macro-character}
+\label{subsec:get-dispatch-macro-character}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/get-dispatch-macro-character
+    (disp-char sub-char &optional
+               (readtable *el-reader/readtable*)))
+\end{lstlisting}
+
+As with \fun{get-macro-character}, this function returns the function (if any)
+associated with the given macro character.  Unlike \fun{get-macro-character}
+however, it only returns one value, as dispatched macro characters cannot be
+non-terminating.  However, the \texttt{dispatching} (i.e. first) character can
+(and in \cl{} also is).
+
+\subsection{copy-readtable}
+\label{subsec:copy-readtable}
+
+\begin{lstlisting}[style=lispinline]
+(defun el-reader/copy-readtable
+    (&optional from-readtable to-readtable))
+\end{lstlisting}
+
+This function copies the contents of one table to another.  If no source is
+given (or is \nil{}), the current readtable is used.  If no destination is given
+(or is \nil{}), a new table is allocated.  In either case, the table where data
+was copied into is returned.
+
+\subsection{getch}
+\label{subsec:getch}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defgeneric el-reader/getch (stream &optional char))
+\end{lstlisting}
+
+When methods of this function are called with only a stream, a character is
+returned from that stream.  If the end of the stream is reached, it signals an
+error of type \sym{end-of-file}.
+
+If a method is called with an additional argument, it shall be a character.
+This character is put back onto the stream.  Methods may or may not allow
+putting back more than one character, or putting back characters which were not
+read from the stream, yet a read macro may never assume this is valid!
+
+\subsection{peek-char}
+\label{subsec:peek-char}
+
+\begin{lstlisting}[style=lispinline]
+(defun el-reader/peek-char (stream))
+\end{lstlisting}
+
+Works as \fun{getch}, yet leaves the character on the stream.
+
+\subsection{read}
+\label{subsec:read}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/read (&optional input-stream
+                                    (eof-error-p t)
+                                    eof-value
+                                    recursive-p
+                                    keys))
+\end{lstlisting}
+
+This function is the main entry point to the reader.  As it’s name implies, it
+reads code.  Namely, it reads one expression from a given (or implied) input
+source.  User may call this function directly, yet for many programs this is not
+done, as the reader is invoked by the Lisp environment by loading code.  Other
+use cases were discussed in section \ref{subsec:sexp-communication}.
+
+Users who wish to implement their own read macros on the other hand, have to use
+\Read{} directly, as well as previously discussed functions to assign a function
+to a macro character.
+
+A call to \Read{} does not require any arguments, yet those which may be given
+are discussed here.
+
+\begin{description}
+\item[input-stream] This is an object on which a method for the generic function
+  \fun{get-getch-state} is defined, and which returns an object for
+  which a method for the generic function \fun{getch} is defined.
+\item[eof-error-p] This flag indicates whether encountering the end of the input
+  stream should raise an error or return a specific value.  The default is to
+  raise an error. 
+\item[eof-value] If \sym{eof-error-p} is non-\nil{}, this value will be
+  returned.  It defaults to \nil{}.
+\item[recursive-p] This should be true if \Read{} is called inside another read
+  call, i.e. when it is a recursive call.  Why it is important for \Read{} to
+  know this is discussed in section \ref{subsec:circular-datastructures}.  As a
+  rule of thumb one can say that this argument shall always be non-\nil{} if
+  called from within a read macro and \nil{} if done with no reference to
+  macros.
+
+  Note that a call may be recursive, have \sym{recursive-p} set to \nil{} and
+  still be valid: if the user needs to read from a stream (possibly a different
+  one than is currently being read from) while processing a read macro.  In such
+  a case a call to read is recursive in the sense that there are at the time of
+  calling \Read{} already other calls to \Read{} on the call stack.  On the
+  other hand, it has nothing to do with those parent calls, and should work
+  independently of those.
+\item[keys] This is only used internally---users should never supply a
+  non-\nil{} value!  The only reason this exists, is because \el{}---in contrast
+  to \cl{}---does not support returning multiple values.
+\end{description}
+
+\subsection{read-preserving-whitespace}
+\label{subsec:read-preserving-whitespace}
+
+\begin{lstlisting}[style=lispinline]
+(cl-defun el-reader/read-preserving-whitespace
+    (&optional input-stream (eof-error-p t) eof-value
+               recursive-p))
+\end{lstlisting}
+
+This function works in the same way as \Read{}, with one difference.  When done
+reading an expression which ends with whitespace, \Read{} consumes a whitespace
+character, yet does not put it back.  This function does this.
+
+It is implemented by creating a new binding of the variable
+\sym{*preserve-whitespace*} (see section \ref{subsec:preserve-whitespace}) to
+\tee{} before calling \Read{}.  It only does so if not called as a recursive
+call.  This brings us to the next section: variables.
+
+\section{Variables}
+\label{sec:variables}
+
+Besides functions, there are also variables which influence the behavior of
+several functions.  It is important to note that all of these variables may be
+rebound at the stack level, hence a caller may influence not only the direct
+callee, but all further callees.
+
+\subsection{*readtable*}
+\label{subsec:readtable-var}
+
+This variable holds the \texttt{current} readtable.  Some functions allow the
+caller to pass in a readtable as an argument, some don’t.  In either case, the
+default is this variable.
+
+\subsection{*read-base*}
+\label{subsec:read-base}
+
+When no extra construct is used, integers are read in base 10.  This is because
+the default value for \sym{*read-base*} is 10, and the reader always uses this
+variable to determine which base to use.  Thus reading hex numbers may be done
+in three different ways:
+
+\begin{lstlisting}[style=lispinline]
+\#xF
+\#16rF
+(let ((*el-reader/read-base* 16))
+  (el-reader/read "F"))
+\end{lstlisting}
+
+All of the above expressions return the number \(15_{10}\).
+
+\subsection{preserve-whitespace}
+\label{subsec:preserve-whitespace}
+
+This variable controls whether \Read{} leaves whitespace at the end of an
+expression intact or not.  The default is \nil{}.
+
+\section{Differences with \cl{}}
+\label{sec:cl-differences}
+
+
+% \section{The readtable}
+% \label{subsec:readtable}
+
+% The only user visible data structure is the readtable.  In \cl{} this type has
+% non-enumerable types, while in \elr{} it is defined in terms of
+% \fun{defclass}, hence is enumerable and even has public attributes.  Most users
+% will need none of these.  They are mostly needed when creating a completely new
+% readtable from scratch.
+
+% \section{Functions}
+% \label{subsec:functions}
+
+% Here be dragons.
 
 \vfill
 \pagebreak

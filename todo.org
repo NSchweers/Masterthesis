@@ -23,3 +23,12 @@
 * TODO clear up formatting and typography (2 days)
 * TODO give it to wilhelm and manuel for proof-reading (3 days).
 * TODO print it and hand it in (1 day)
+* TODO write a test case for the following scenario:
+  A read macro calls read on a different stream as toplevel.  Both streams
+  include object references with the same numbers.  
+
+  This can (hopefully) be fixed by letting each toplevel call to read rebind
+  *el-reader//read-objects* to nil.
+* TODO (optionally) write a TeX macro
+  automatically link any mention of a function (or add a page number). 
+* TODO define getch in terms of peek-char, not the other way around!
