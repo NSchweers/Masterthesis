@@ -198,7 +198,7 @@ tutorials found both on the web, and in books.
 Throughout this thesis, the names of functions, classes, variables and plain
 symbols are written in a \texttt{monospace} font.  Code is mostly placed in
 boxes and listings, but the occasional short expression may be put between
-double quotes.  Single characters embedded into the text are surrounded by
+``double quotes''.  Single characters embedded into the text are surrounded by
 single quotes.  Note that only the quote signs as used in source code of
 virtually all programming languages (i.e. the characters ‚'’ and ‚"’) are to be
 taken as part of such an expression or character.
@@ -241,10 +241,12 @@ single and double slash are used for this purpose as it is more easily
 distinguished from the other dashes used to separate names.
 
 Special (a.k.a. dynamic, a.k.a. global) variables are---by
-convention---surrounded by asterisks.
+convention---surrounded by asterisks, yet only the part of the name which does
+not include a prefix.  I.e. the readtable is placed in
+\sym{el-reader/*readtable*}, not \sym{*el-reader/readtable*}.
 
-Hence, every symbol which begins with \sym{el-reader/} or \sym{*el-reader/}, not
-followed by a second immediate slash, denotes a public variable or function.
+Hence, every symbol which begins with \sym{el-reader/} and is not followed by a
+second immediate slash, denotes a public variable or function.
 
 To make the names used in this thesis shorter, the full name is used once, and
 from then on the part after the slash(es) is used.
@@ -554,8 +556,8 @@ prefix for all accessors.
                     (eieio-class-slots class)))))
 \end{lstlisting}
 
-For every data member \sym{memb}, prefix \sym{prefix/} in the class
-\sym{klass}, the code in listing \ref{code:data-member} has to be generated.
+For every data member \sym{memb}, prefix \sym{prefix/} in the class \sym{klass},
+the code in listing \ref{code:data-member} has to be generated.
 
 \begin{lstlisting}[style=lispcode,caption={Getter and Setter for a member called
   \sym{member}.},label={code:data-member}]
@@ -831,8 +833,8 @@ Numbers are also often a little different than in mainstream languages.  Both
 for integers in several bases: \texttt{\#b1111} \texttt{\#o17} \texttt{\#xF} and
 \texttt{15} all represent the number 15 in base 10.  This notation is the same
 in \cl{} and \el{}.  This notation has a certain air of elegance to it as soon
-as one realizes that \texttt{\#} is a dispatching macro character\todo{Add a
-  section on dispatching macro characters and reference it.}.  This means that
+as one realizes that \texttt{\#} is a dispatching macro character (see section
+\ref{subsec:dispatching-macro-chars} for details).  This means that
 \texttt{\#b}, \texttt{\#o} and \texttt{\#x} may be implemented as read macros.
 
 \chapter{Motivation}
@@ -1684,7 +1686,7 @@ The reader consists of 10 numbered steps:
     into the stream and the token so far is processed.  The processed token (a
     symbol or a number) is returned, thus \Read{} is done.
   \item If \texttt{Y} is a whitespace character, \texttt{Y} is put back into the
-    stream if \texttt{*el-reader/preserve-whitespace*} is true.  In both cases
+    stream if \texttt{el-reader/*preserve-whitespace*} is true.  In both cases
     the token is processed and returned, thus \Read{} is done.
   \item If \texttt{Y} is a constituent or \emph{non}-terminating macro
     character, it is appended onto the token and step 8 repeats.
@@ -1739,33 +1741,33 @@ and 9 have been pulled out as extra functions and put in front of
                 (end-of-file (cl-return-from el-reader//step-8
                                (el-reader//process-token token)))))
       (cond ((el-reader//rt/invalid-syntax-type-p
-              *el-reader/readtable* y)
+              el-reader/*readtable* y)
              (signal 'reader-error (list "Invalid character" y)))
             ((el-reader//rt/single-escape-char-p
-              *el-reader/readtable* y)
+              el-reader/*readtable* y)
              (setf token (s-concat token
                                    (el-reader//put-escaped-prop
                                     (el-reader//force-alphabetic
                                      (el-reader/getch input-stream))))))
             ((el-reader//rt/multiple-escape-char-p
-              *el-reader/readtable* y)
+              el-reader/*readtable* y)
              (cl-return-from el-reader//step-8
                (el-reader//step-9 input-stream
                                   token
                                   y)))
             ((el-reader//rt/terminating-macro-char-p
-              *el-reader/readtable* y)
+              el-reader/*readtable* y)
              (el-reader/getch input-stream y)
              (cl-return-from el-reader//step-8
                (el-reader//process-token token)))
-            ((el-reader//rt/whitespacep *el-reader/readtable* y)
-             (when *el-reader/preserve-whitespace*
+            ((el-reader//rt/whitespacep el-reader/*readtable* y)
+             (when el-reader/*preserve-whitespace*
                (el-reader/getch input-stream y))
              (cl-return-from el-reader//step-8
                (el-reader//process-token token)))
-            ((or (el-reader//rt/constituentp *el-reader/readtable* y)
+            ((or (el-reader//rt/constituentp el-reader/*readtable* y)
                  (el-reader//rt/non-terminating-macro-char-p
-                  *el-reader/readtable* y))
+                  el-reader/*readtable* y))
              (setf token (s-concat token
                                    (el-reader//defaults-to-str-props
                                     y))))))))
@@ -1781,7 +1783,7 @@ and 9 have been pulled out as extra functions and put in front of
                   #'-orfn
                   (seq-map
                    (lambda (fn)
-                     (-partial fn *el-reader/readtable*))
+                     (-partial fn el-reader/*readtable*))
                    (list
                     #'el-reader//rt/constituentp
                     #'el-reader//rt/terminating-macro-char-p
@@ -1790,23 +1792,23 @@ and 9 have been pulled out as extra functions and put in front of
                  y)
         (setf token (s-concat token (el-reader//put-escaped-prop
                                      (el-reader//force-alphabetic y)))))
-       ((el-reader//rt/single-escape-char-p *el-reader/readtable* y)
+       ((el-reader//rt/single-escape-char-p el-reader/*readtable* y)
         (setf token (s-concat
                      token
                      (el-reader//put-escaped-prop
                       (el-reader//force-alphabetic
                        (el-reader/getch input-stream))))))
-       ((el-reader//rt/multiple-escape-char-p *el-reader/readtable* y)
+       ((el-reader//rt/multiple-escape-char-p el-reader/*readtable* y)
         (cl-return-from el-reader//step-9
           (el-reader//step-8 input-stream token x)))
-       ((el-reader//rt/invalidp *el-reader/readtable* y)
+       ((el-reader//rt/invalidp el-reader/*readtable* y)
         (signal 'reader-error "Invalid char"))))))
 
 (cl-defun el-reader/read (&optional input-stream (eof-error-p t)
                                     eof-value recursive-p keys)
-  (let ((res *el-reader/repeat-read*)
+  (let ((res el-reader/*repeat-read*)
         (input-stream (el-reader//get-getch-state input-stream)))
-    (while (eq res *el-reader/repeat-read*)
+    (while (eq res el-reader/*repeat-read*)
       (setf
        res
        (let ((x (condition-case c
@@ -1816,19 +1818,19 @@ and 9 have been pulled out as extra functions and put in front of
                        (signal (car c) (cdr c))
                      (cl-return-from el-reader/read eof-value))))))
          (when (not recursive-p)
-           (setf *el-reader//read-objects* nil
+           (setf el-reader//*read-objects* nil
                  *el-reader//circular-read-functions* nil))
          (cond ((el-reader//rt/invalid-syntax-type-p
-                                    *el-reader/readtable* x)
+                                    el-reader/*readtable* x)
                 (signal 'reader-error (list "Invalid char" x)))
-               ((el-reader//rt/whitespacep *el-reader/readtable* x)
-                *el-reader/repeat-read*)
+               ((el-reader//rt/whitespacep el-reader/*readtable* x)
+                el-reader/*repeat-read*)
                ((el-reader//rt/terminating-macro-char-p
-                 *el-reader/readtable* x)
-                (let ((*el-reader//allow-single-dot-symbol* nil))
+                 el-reader/*readtable* x)
+                (let ((el-reader//*allow-single-dot-symbol* nil))
                   (let ((res (funcall
                               (gethash x (el-reader//rt/term-mac-fns
-                                *el-reader/readtable*))
+                                el-reader/*readtable*))
                               input-stream x)))
                     (when (not (listp res))
                       (error (s-join
@@ -1837,13 +1839,13 @@ and 9 have been pulled out as extra functions and put in front of
                                 "return a (possibly empty) list."))))
                     res)))
                ((el-reader//rt/non-terminating-macro-char-p
-                 *el-reader/readtable* x)
-                (let ((*el-reader//allow-single-dot-symbol* nil))
+                 el-reader/*readtable* x)
+                (let ((el-reader//*allow-single-dot-symbol* nil))
                   (let ((res (funcall
                               (gethash
                                x
                                (el-reader//rt/non-term-mac-fns
-                                *el-reader/readtable*))
+                                el-reader/*readtable*))
                               input-stream x)))
                     (when (not (listp res))
                       (error (s-join
@@ -1852,7 +1854,7 @@ and 9 have been pulled out as extra functions and put in front of
                                 "return a (possibly empty) list."))))
                     res)))
                ((el-reader//rt/single-escape-char-p
-                                    *el-reader/readtable* x)
+                                    el-reader/*readtable* x)
                 (cl-values (el-reader//step-8
                             input-stream
                             (el-reader//put-escaped-prop
@@ -1860,9 +1862,9 @@ and 9 have been pulled out as extra functions and put in front of
                               (el-reader/getch input-stream)))
                             x)))
                ((el-reader//rt/multiple-escape-char-p
-                                    *el-reader/readtable* x)
+                                    el-reader/*readtable* x)
                 (cl-values (el-reader//step-9 input-stream "" x)))
-               ((el-reader//rt/constituentp *el-reader/readtable* x)
+               ((el-reader//rt/constituentp el-reader/*readtable* x)
                 (cl-values (el-reader//step-8
                             input-stream
                             (el-reader//defaults-to-str-props x)
@@ -1965,8 +1967,8 @@ The following steps constitute the algorithm for \fun{read-delimited-list}:
   \fun{read-delimited-list}},numbers=left]
 (defun el-reader/read-delimited-list (char &optional stream
                                            _recursive-p)
-  (let ((end-res *el-reader/repeat-read*))
-    (while (eq end-res *el-reader/repeat-read*)
+  (let ((end-res el-reader/*repeat-read*))
+    (while (eq end-res el-reader/*repeat-read*)
       (setf
        end-res
        (let ((res-list nil)
@@ -1974,20 +1976,20 @@ The following steps constitute the algorithm for \fun{read-delimited-list}:
          (while (/= c char)
            (cond
             ((el-reader//rt/invalid-syntax-type-p
-              *el-reader/readtable* c)
+              el-reader/*readtable* c)
              (signal 'reader-error (list "Invalid char" c)))
-            ((el-reader//rt/whitespacep *el-reader/readtable* c)
+            ((el-reader//rt/whitespacep el-reader/*readtable* c)
              (el-reader/getch stream)
              (setf c (el-reader/peek-char stream)))
-            ((or (el-reader//rt/constituentp *el-reader/readtable* c)
+            ((or (el-reader//rt/constituentp el-reader/*readtable* c)
                  (el-reader//rt/terminating-macro-char-p
-                  *el-reader/readtable* c)
+                  el-reader/*readtable* c)
                  (el-reader//rt/non-terminating-macro-char-p
-                  *el-reader/readtable* c)
+                  el-reader/*readtable* c)
                  (el-reader//rt/single-escape-char-p
-                  *el-reader/readtable* c)
+                  el-reader/*readtable* c)
                  (el-reader//rt/multiple-escape-char-p
-                  *el-reader/readtable* c))
+                  el-reader/*readtable* c))
              (let ((res (el-reader/read stream t nil t
                                         '(:return-list t))))
                (if res
@@ -1997,7 +1999,7 @@ The following steps constitute the algorithm for \fun{read-delimited-list}:
                              " "
                              '("Read-macro functions must always "
                                "return a (possibly empty) list."))))
-                 *el-reader/repeat-read*))
+                 el-reader/*repeat-read*))
              (setf c (el-reader/peek-char stream)))))
          (el-reader/getch stream)
          (reverse res-list))))
@@ -2091,7 +2093,7 @@ This is the corresponding lisp code:
     \fun{el-reader//read-lisp-list}},numbers=left]
 (defun el-reader//read-lisp-list (stream _char)
   (cl-values
-   (let ((*el-reader//allow-single-dot-symbol* t))
+   (let ((el-reader//*allow-single-dot-symbol* t))
      (let ((l (el-reader/read-delimited-list ?\) stream t))
            (dot (intern ".")))
        (cond ((and (>= (seq-length l) 3)
@@ -2176,11 +2178,11 @@ Then an object is read from the stream via a call to \Read{}.  The read object
 is then recorded in the previously mentioned vector.
 
 When \texttt{\#n\#} is encountered, it is first checked whether or not a number
-was passed.  The function for this macro character is
-\fun{el-reader//read-hash-num-hash}.  If not, the empty symbol is returned.
-Otherwise the global list of object references is searched for the number
-passed.  If no such number is found an error is signaled, as it is invalid to
-reference something before it was defined.
+was passed.  The code implementing this macro character can be found in the
+function \fun{el-reader//read-hash-num-hash}.  If not, the empty symbol is
+returned.  Otherwise the global list of object references is searched for the
+number passed.  If no such number is found an error is signaled, as it is
+invalid to reference something before it was defined.
 
 In case such a reference was found, the marker object (the empty cons cell)
 which was put into the three element vector mentioned previously, is returned.
@@ -2401,8 +2403,9 @@ Thus, functions which parse an entity may be passed to functions which combine
 such functions.
 
 Last but not least there are also functions which return a function which parse
-an entity based on some input.  One such function is
-\fun{el-reader//parse-single-char}, which has the following signature:
+an entity based on some input.  One such function which does this by parsing a
+single character is \fun{el-reader//parse-single-char}, which has the following
+signature:
 
 \begin{lstlisting}[style=lispinline]
 char -> (token -> pos)
@@ -2463,9 +2466,14 @@ character may not be used as a part of a symbol.\footnote{Note that in \cl{} it
   character, but because it is non-terminating.}
 
 The reason this algorithm is not directly part of the reader, is because it
-itself is implemented as a regular read macro.  The function
-\fun{make-dispatch-macro-character} registers the given character to be a macro
-character and associates a predefined function to it.
+itself is implemented as a regular read macro.  The function which registers a
+given character to be a dispatching macro character by associating a predefined
+function which does the dispatching based on the current readtable is
+\fun{make-dispatch-macro-character}.
+
+% The function
+% \fun{make-dispatch-macro-character} registers the given character to be a macro
+% character and associates a predefined function to it.
 
 \section{Datastructures}
 \label{sec:datastructures}
@@ -2513,7 +2521,7 @@ function, or retrieve said function.
 Most other functions which interact with the readtable (e.g. \Read{}) do not
 take a readtable as an argument, as this would be very cumbersome.  These
 functions use the global default, which is the variable
-\sym{*el-reader/readtable*}.  It is important to note that `global' means that
+\sym{el-reader/*readtable*}.  It is important to note that `global' means that
 the variable is dynamically bound, i.e. can be rebound on a stack frame with
 \fun{let}.  This makes global variables much more powerful and useful than in
 more static languages like C, as they are globally visible, but can be rebound
@@ -2786,7 +2794,7 @@ section \ref{sec:api-reference}:
 
 In this section an example of a read macro is presented and discussed in detail.
 It is a fairly simple, yet useful macro.  As mentioned earlier in this thesis
-(see section \ref{chapter:motivation}), Clojure---along with many other
+(see section \ref{chapter:motivation}), Clojure---like many other more modern
 languages---features a concise notation for hash-tables, namely surrounding a
 list of keys and values with curly braces.  Such notation is implemented and
 shown in this example.  Listing \ref{code:hash-table} shows the code.
@@ -2819,28 +2827,41 @@ Keys and values are given alternating in args."
 
 As with regular macros, it is important to remember which code is run at which
 time.  The code shown in the function \fun{read-hash-table} is run at read time,
-namely as soon as \Read{} encounters an opening curly brace.
+namely as soon as \Read{} encounters an opening curly brace.  This is the case
+because of the line of code directly following the definition of the function.
+It registers the open curly brace to be a terminating (because non-terminating
+would have required an extra flag, which was not given) macro character, and
+associates it with the function \fun{read-hash-table}.  The last line registers
+another character as a macro character, namely the closing brace.  As the
+closing brace does not do much, except serve as a closing marker, it may not be
+obvious what its associated function should do.  The last expression in the
+shown code fetches the function used for the closing parenthesis and reuses it.
+The only thing this function does is raise an error.  This is because a closing
+paren or brace may never be read directly.
 
 As the proposed syntax consists of a list of alternating keys and values
 directly surrounded by curly braces, the obvious tool to reach for is
 \fun{read-delimited-list}.  This function is passed a character to look out for
-(which is also a macro character) as well as a stream and whether the call is
-performed from within a recursive call to read.  While \elr{} (currently)
+(which must also be a macro character) as well as a stream and whether the call
+is performed from within a recursive call to read.  While \elr{} (currently)
 completely ignores this argument, it is a good idea to always set this to
-\tee{}, if only for the sake of consistency with \cl{}.
+\tee{}, if only for the sake of consistency with \cl{}.  The call to
+\fun{read-delimited-list} not only reads a list, it also removes the closing
+character from the stream.  This is done without invoking the function
+associated with the character.  This means that if \Read{} directly encounters a
+closing paren or brace, it must be a syntax error.  It is for this reason that
+the only thing the function associated with these characters does is to signal
+the appropriate error.
 
 The result of the call to \fun{read-delimited-list} is---not surprisingly---a
-list of all expressions between the curly braces.  As it is expected that the
-user passes alternating keys and values, it would be an error to place an odd
-number of expressions between the braces, so the next line checks for this
-possibility.  Remember that the expressions given by the user have \texttt{not}
-been evaluated.  They have merely been read!  If the user places an unquoted
-symbol as a key, the symbol itself is returned.  Only in the next step something
-possibly unexpected would happen.  If the number of expressions is indeed odd,
-an error is signaled, which occurs at read-time.  This means that informing the
-user of the error in the program is not delayed until runtime, as it is so often
-the case in dynamic languages like Lisp.  Instead the user is informed
-immediately.
+list of all expressions between the curly braces.  Remember that the expressions
+given by the user have \texttt{not} been evaluated.  They have merely been read!
+If the user places an unquoted symbol as a key, the symbol itself is returned.
+Only in the next step something possibly unexpected would happen.  If the number
+of expressions is indeed odd, an error is signaled, which occurs at read-time.
+This means that informing the user of the error in the program is not delayed
+until runtime, as it is so often the case in dynamic languages like Lisp.
+Instead the user is informed immediately.
 
 The last step (which is only run in case an even number of expressions was read)
 is seemingly innocuous, yet may hold some surprises for users not particularly
@@ -2892,7 +2913,7 @@ always result in a table where the key \sym{:foo} was mapped to the symbol
 (cl-defun el-reader/set-macro-character
     (char new-function &optional
           non-terminating-p
-          (readtable *el-reader/readtable*)))
+          (readtable el-reader/*readtable*)))
 \end{lstlisting}
 
 This function is used to set a given character to be a macro character.  As can
@@ -2921,7 +2942,7 @@ example in section \ref{sec:example}.
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/get-macro-character
     (char &optional
-          (readtable *el-reader/readtable*)))
+          (readtable el-reader/*readtable*)))
 \end{lstlisting}
 
 This function retrieves the function set in the given (or current) readtable for
@@ -2939,7 +2960,7 @@ question and a flag denoting whether the character in question is a terminating
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/make-dispatch-macro-character
     (char &optional non-terminating-p
-          (readtable *el-reader/readtable*)))
+          (readtable el-reader/*readtable*)))
 \end{lstlisting}
 
 This function creates a new dispatching macro character.  Macro characters
@@ -2956,7 +2977,7 @@ character, the two concepts are completely unrelated.  In fact, in \elr{},
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/set-dispatch-macro-character
     (disp-char sub-char new-function &optional
-               (readtable *el-reader/readtable*)))
+               (readtable el-reader/*readtable*)))
 \end{lstlisting}
 
 As with \fun{set-macro-character}, takes a character (in this case two, namely a
@@ -2970,7 +2991,7 @@ Associates the given character sequence with the given function.  Always returns
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/get-dispatch-macro-character
     (disp-char sub-char &optional
-               (readtable *el-reader/readtable*)))
+               (readtable el-reader/*readtable*)))
 \end{lstlisting}
 
 As with \fun{get-macro-character}, this function returns the function (if any)
@@ -3043,8 +3064,8 @@ are discussed here.
 
 \begin{description}
 \item[input-stream] This is an object on which a method for the generic function
-  \fun{get-getch-state} is defined, and which returns an object for
-  which a method for the generic function \fun{getch} is defined.
+  \fun{get-getch-state} is defined, and which returns an object for which a
+  method for the generic function \fun{getch} is defined.
 \item[eof-error-p] This flag indicates whether encountering the end of the input
   stream should raise an error or return a specific value.  The default is to
   raise an error. 
@@ -3082,10 +3103,13 @@ This function works in the same way as \Read{}, with one difference.  When done
 reading an expression which ends with whitespace, \Read{} consumes a whitespace
 character, yet does not put it back.  This function does this.
 
-It is implemented by creating a new binding of the variable
-\sym{*preserve-whitespace*} (see section \ref{subsec:preserve-whitespace}) to
-\tee{} before calling \Read{}.  It only does so if not called as a recursive
-call.  This brings us to the next section: variables.
+% It is implemented by creating a new binding of the variable
+% \sym{*preserve-whitespace*} (see section \ref{subsec:preserve-whitespace}) to
+% \tee{} before calling \Read{}.
+Creating a new binding of the variable \sym{*preserve-whitespace*} (see section
+\ref{subsec:preserve-whitespace}) to \tee{} before calling \Read{} is sufficient
+to implement this function.  It only does so if not called as a recursive call.
+This brings us to the next section: variables.
 
 \section{Variables}
 \label{sec:variables}
@@ -3113,7 +3137,7 @@ in three different ways:
 \begin{lstlisting}[style=lispinline]
 \#xF
 \#16rF
-(let ((*el-reader/read-base* 16))
+(let ((el-reader/*read-base* 16))
   (el-reader/read "F"))
 \end{lstlisting}
 
@@ -3128,6 +3152,105 @@ expression intact or not.  The default is \nil{}.
 \section{Differences with \cl{}}
 \label{sec:cl-differences}
 
+While \elr{} takes inspiration from the reader used in \cl{}, it is not exactly
+the same.  Some of this is by design, to slightly improve the reader, but some
+is due to deficiencies in \el{}.
+
+\subsection{Improvements}
+\label{subsec:improvements}
+
+The API of \elr{} is a little more flexible than the reader standardized for
+\cl{}.\footnote{While it should be allowed for a \cl{} implementation to allow a
+more flexible reader, such extensions do not at all seem to be very common.}
+There are two differences, which were both already discussed in previous
+sections.
+
+\subsubsection{Setting syntax and traits}
+\label{subsubsec:set-syntax-traits}
+
+As the readtable in \elr{} is not opaque it is possible for a user to set the
+syntax types of characters more flexibly than in \cl{}.  In \cl{} the user must
+first find a character which has the desired syntax type and may copy the type
+from said character to a desired other one.  This may be difficult if the user
+wishes to make characters invalid (\elr{} for instance does not define any
+characters to be invalid).  A user may either modify an existing table directly
+(although this should go through a function in future versions of this reader),
+or pass the character(s) in question to the appropriate fields of
+\fun{make-instance}.
+
+While \elr{} doesn’t go further with traits, it does go much further than \cl{}
+does: in \elr{}, traits can be set the same way as syntax types, yet \cl{} does
+not allow traits to be set at all.
+
+\subsubsection{Mapping characters to numbers}
+\label{subsubsec:chars-to-nums}
+
+Both in \el{} and \cl{} it is possible to read numbers in different bases,
+namely from 2 to 36.  The maximum is 36 because the code for the character ‘Z’
+is 35 (i.e. 0-9, A-Z).  In \cl{} the mapping of characters to numbers is fixed,
+which is not generally a problem.  In \elr{} this mapping is not fixed.
+Instead, the readtable holds a hash table which provides a mapping from
+characters to numbers.
+
+A user can achieve a different mapping by adjusting which characters are
+alphadigits (a trait) in the first place, and by changing the mapping from
+characters to numbers.  So, if the user so desires, a ‘\(\lambda{}\)’ could be a
+number.
+
+\subsection{Differences due to deficiencies in \el{}}
+\label{subsec:deficiency-diffs}
+
+Sadly, \el{} lacks some features of \cl{}.  While the support for multimethods
+is not nearly as thorough as in \cl{}, it is sufficient for the purposes of this
+project.  Other features lacking on the other hand, do cause problems.
+
+\subsubsection{Return values of read macro procedures}
+\label{subsubsec:ret-vals}
+
+The function associated with a read macro reads from the stream and constructs a
+Lisp object from the read data.  This object is returned from the function.
+While this sounds very straightforward, the question arises what a function
+shall do if no object is created.  This does not necessarily be an error!  One
+particular case is the syntax for comments.  The ‘;’ character is a macro
+character which reads and ignores characters from the stream until the end of
+the line is reached.  This means that no value is produced, hence no value can
+be returned.  In \cl{} a function may return multiple values.  This may be a bit
+of a misnomer, because it not only means that a function may return more than
+one object, it may return more than \emph{zero} objects!  This feature is used
+in \cl{} to cope with the fact that some read macros do not produce lisp
+objects.  For \elr{} the obvious solution was to simply return a list, which may
+be a singleton list, or an empty list.  The disadvantage is that users must
+remember to always wrap their code either in a \fun{list} or \fun{cl-values}
+form.\footnote{The function \fun{cl-values} comes from the \sym{CL} package in
+  \emacs{} which tries to provide emulation for some \cl{} features missing in
+  \el{}.}
+
+The advantage of \cl{}’s multiple values support is that returning a single
+value does not require special syntax on behalf of the user.  Also, a user may
+simply ignore any excess values a function returns.  In such a case only the
+\emph{primary value} is used.
+
+This is the reason why read macros written in \cl{} simply return a value, while
+for \elr{} the return value must be wrapped in a list.
+
+\subsubsection{Package support}
+\label{subsubsec:package-support}
+
+In \cl{} the colon has a special meaning in symbol read syntax.  If the first
+character of a token is a colon, it is interned into the keywords package, and
+has itself as its value cell.  In \el{} only the latter is the case.
+
+If a symbol contains a colon somewhere in the middle, the first part is used as
+a package qualifier, while the second denotes a symbol in said package.  Also a
+double colon may be used for non-exported symbols.
+
+The exact details of \cl{}’s package system are beyond the scope of this thesis,
+let alone this section.  Suffice to say that \el{} cannot support this behavior,
+at least not in its present state.  This is because symbols form a linked list
+inside of an obarray bucket.  This is discussed in section
+\ref{subsubsec:symbols} in more detail.  As symbols may not exist in more than
+one obarray, package support can not be implemented by the reader.  Hence
+another difference with \cl{}.
 
 % \section{The readtable}
 % \label{subsec:readtable}

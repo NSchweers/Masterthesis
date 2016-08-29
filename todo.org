@@ -14,9 +14,10 @@
   - Write on circular reads
   - Write on interpreting numbers
 * DONE describe the used datastructures (also on how macro chars relate to their functions
-* TODO shorten long names (el-reader/foo or el-reader//foo to foo).
-* TODO clear up references and other todo notes in the thesis (3 days)
+* DONE shorten long names (el-reader/foo or el-reader//foo to foo).
+* DONE clear up references and other todo notes in the thesis (3 days)
 * TODO document the API, including differences to the CL API (3 days)
+* TODO Write something on the future of this project. (1 day)
 * TODO write something on lisp evaluation (1 day)
 * TODO write something on extending Emacs with C modules (3 days)
   Why it has not been done yet.
@@ -28,7 +29,7 @@
   include object references with the same numbers.  
 
   This can (hopefully) be fixed by letting each toplevel call to read rebind
-  *el-reader//read-objects* to nil.
+  el-reader//*read-objects* to nil.
 * TODO (optionally) write a TeX macro
   automatically link any mention of a function (or add a page number). 
 * TODO define getch in terms of peek-char, not the other way around!
