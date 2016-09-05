@@ -16,10 +16,11 @@
 * DONE describe the used datastructures (also on how macro chars relate to their functions
 * DONE shorten long names (el-reader/foo or el-reader//foo to foo).
 * DONE clear up references and other todo notes in the thesis (3 days)
-* TODO document the API, including differences to the CL API (3 days)
-* TODO Write something on the future of this project. (1 day)
+* DONE document the API, including differences to the CL API (3 days)
+* DONE Write something on the future of this project. (1 day)
+* TODO take another look at the abstract.
 * TODO write something on lisp evaluation (1 day)
-* TODO write something on extending Emacs with C modules (3 days)
+* DONE write something on extending Emacs with C modules (3 days)
   Why it has not been done yet.
 * TODO clear up formatting and typography (2 days)
 * TODO give it to wilhelm and manuel for proof-reading (3 days).
@@ -33,3 +34,4 @@
 * TODO (optionally) write a TeX macro
   automatically link any mention of a function (or add a page number). 
 * TODO define getch in terms of peek-char, not the other way around!
+* DONE but nonbreaking spaces before \refs
