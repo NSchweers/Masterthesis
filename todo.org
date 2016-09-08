@@ -18,12 +18,12 @@
 * DONE clear up references and other todo notes in the thesis (3 days)
 * DONE document the API, including differences to the CL API (3 days)
 * DONE Write something on the future of this project. (1 day)
-* TODO take another look at the abstract.
+* DONE take another look at the abstract.
 * TODO write something on lisp evaluation (1 day)
 * DONE write something on extending Emacs with C modules (3 days)
   Why it has not been done yet.
-* TODO clear up formatting and typography (2 days)
-* TODO give it to wilhelm and manuel for proof-reading (3 days).
+* DONE clear up formatting and typography (2 days)
+* DONE give it to wilhelm and manuel for proof-reading (3 days).
 * TODO print it and hand it in (1 day)
 * TODO write a test case for the following scenario:
   A read macro calls read on a different stream as toplevel.  Both streams
@@ -31,12 +31,14 @@
 
   This can (hopefully) be fixed by letting each toplevel call to read rebind
   el-reader//*read-objects* to nil.
-* TODO define getch in terms of peek-char, not the other way around!
+* DONE define getch in terms of peek-char, not the other way around!
+  Performed a different solution: peek-char is now a generic function with a
+  sensible default implementation.
 * DONE put nonbreaking spaces before \refs
 
-* TODO Kapitel zusammenfassen
-* TODO Hyperspec und co mit extra argument zu \cite genauer verweisen
-* TODO 8.6.2 nochmal ansehen
-* TODO parsers vs readers: auf seibel verweisen?
+* DONE Kapitel zusammenfassen
+* DONE Hyperspec und co mit extra argument zu \cite genauer verweisen
+* DONE 8.6.2 nochmal ansehen
+* DONE parsers vs readers: auf seibel verweisen?
   http://www.gigamonkeys.com/book/syntax-and-semantics.html
-* TODO was über string properties schreiben
+* DONE was über string properties schreiben
