@@ -42,3 +42,4 @@
 * DONE parsers vs readers: auf seibel verweisen?
   http://www.gigamonkeys.com/book/syntax-and-semantics.html
 * DONE was über string properties schreiben
+* DONE Was über die aktivierung von el-reader in einem buffer schreiben!!!

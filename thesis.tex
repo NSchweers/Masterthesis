@@ -284,8 +284,8 @@ level functions as possible in Lisp.\footnote{Why Stallman felt that using C
   a part in this decision.}  The dialect he designed and implemented is called
 \el{}, or elisp for short\footnote{Note though, that there once was an unrelated
   dialect of the name elisp.}.  In 1984 Stallman wrote what is now known as
-\emacs{}\cite{emacs-first-release}. Since then, \el{} has grown and changed a
-lot.
+\emacs{}\cite[See ``History'']{emacs-first-release}. Since then, \el{} has grown
+and changed a lot.
 
 While \emacs{} is primarily a text editor, it achieves its extensibilty by
 being/providing a virtual Lisp Machine.  So far only some experimental features
@@ -299,8 +299,8 @@ capabilities of \emacs{} are rather unimportant.  The thesis will concentrate
 more on the Lisp Machine part of \emacs{}.
 
 The capabilities of \el{} have drastically improved over the last years.  Until
-\emacsv{24.1} \el{} only featured dynamic
-scope\cite{Emacs-Lexical}.\footnote{See \cite{CLTL2}
+\emacsv{24.1} \el{} only featured dynamic scope\cite[See “* Lisp changes in
+Emacs 24.1”]{Emacs-Lexical}.\footnote{See \cite{CLTL2}
   (\url{http://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node43.html})for an
   explanation of why ``dynamic scope'' is a misnomer, yet still useful as a
   term.  While the differences in scope and extent are interesting, they are not
@@ -1788,10 +1788,12 @@ of \el{} code, as can be seen in listing~\ref{code:replace-reader}.
     reader},label={code:replace-reader}]
 (define-advice read (:around (oldfun &optional stream)
                              el-reader//replace-read)
-  (if (and use-el-reader (not el-reader-bytecode))
+  (if use-el-reader
       (el-reader/read stream)
     (funcall oldfun stream)))
 \end{lstlisting}
+
+The use of \sym{use-el-reader} is explained in section~\ref{sec:activation}.
 
 %\section{Compatibility}
 %\label{subsec:compat}
@@ -3231,6 +3233,52 @@ done in the way they are.  The last section of this chapter will provide a short
 reference.  For the most part, any \cl{} reference will do, as the APIs are
 deliberately similar.  Finally the most important differences with \cl{} will be
 summarized.
+
+\section{Activation}
+\label{sec:activation}
+
+To prevent \elr{} from interfering with every code, it has to be activated for
+each file or buffer.  This can be done by exploiting \emacs{}’ buffer local
+variables\cite[11.10 ``Buffer-Local Variables'']{elisp-reference}.
+
+Two buffer local variables were introduced by \elr{}, one of which is
+experimental.  The other is \sym{use-el-reader}.  This informs the advice around
+\Read{} on whether to use \elr{} or the stock reader built into \emacs{}.  The
+best way to set it is to ensure that \elr{} is loaded (for instance by using
+\sym{require} or \sym{load})\cite[15 ``Loading'']{elisp-reference} and by
+putting the line shown in figure~\ref{code:activate-el-reader} before any use of
+\elr{} specific functionality.  Figure~\ref{code:activate-el-reader} shows a
+complete file which activates \elr{}, adds and uses syntax for hash-tables.
+
+\begin{lstlisting}[style=lispcode,label={code:activate-el-reader},
+caption={Activating \elr{}},numbers=left]
+(eval-and-compile
+  (setf use-el-reader t))
+\end{lstlisting}
+
+\begin{lstlisting}[style=lispcode,label={code:using-and-adding-elr},
+caption={Using \elr{} and adding syntax},numbers=left]
+;; -*- lexical-binding: t -*-
+
+(eval-and-compile
+  (setf use-el-reader t))
+
+(defun el-reader//read-hash-table (stream _char)
+   (cl-values
+    (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
+      (if (= (mod (length k-v) 2) 1)
+          (error "Invalid syntax: {}")
+        `(el-reader//ht ,@k-v)))))
+
+(el-reader/set-macro-character ?\{ #'el-reader//read-hash-table)
+
+(cl-multiple-value-bind (fun _term)
+    (el-reader/get-macro-character ?\))
+  (el-reader/set-macro-character ?\} fun))
+
+(message "use-el-reader: \%s" use-el-reader)
+(message "hash-table: \%s" {:foo "FOO!"})
+\end{lstlisting}
 
 \section{Outline}
 \label{sec:outline}
