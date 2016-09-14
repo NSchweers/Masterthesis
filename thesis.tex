@@ -339,81 +339,6 @@ because compiler technology was not nearly as advanced as it is today.
 What makes Lisp so expressive is discussed in greater detail in
 section~\ref{sec:lisp-special}.
 
-\begin{comment}
-  Paul Graham nicely listed 9 particularly important ideas: \cite{pg-lisp-diff}
-
-  \begin{description}
-  \item [Conditionals] A conditional is an if-then-else construct. We take these
-    for granted now. They were invented by McCarthy in the course of developing
-    Lisp. (Fortran at that time only had a conditional goto, closely based on
-    the branch instruction in the underlying hardware.) McCarthy, who was on the
-    Algol committee, got conditionals into Algol, whence they spread to most
-    other languages.
-  \item[A function type] In Lisp, functions are first class objects-- they're a
-    data type just like integers, strings, etc, and have a literal
-    representation, can be stored in variables, can be passed as arguments, and
-    so on.
-  \item[Recursion] Recursion existed as a mathematical concept before Lisp of
-    course, but Lisp was the first programming language to support it. (It's
-    arguably implicit in making functions first class objects.)
-  \item[A new concept of variables] In Lisp, all variables are effectively
-    pointers. Values are what have types, not variables, and assigning or
-    binding variables means copying pointers, not what they point to.
-  \item[Garbage Collection]
-  \item[Programs composed of expressions] Lisp programs are trees of
-    expressions, each of which returns a value. (In some Lisps expressions can
-    return multiple values.) This is in contrast to Fortran and most succeeding
-    languages, which distinguish between expressions and statements.
-
-    It was natural to have this distinction in Fortran because (not surprisingly
-    in a language where the input format was punched cards) the language was
-    line-oriented. You could not nest statements. And so while you needed
-    expressions for math to work, there was no point in making anything else
-    return a value, because there could not be anything waiting for it.
-
-    This limitation went away with the arrival of block-structured languages,
-    but by then it was too late. The distinction between expressions and
-    statements was entrenched. It spread from Fortran into Algol and thence to
-    both their descendants.
-
-    When a language is made entirely of expressions, you can compose expressions
-    however you want. You can say either (using Arc syntax)
-
-\begin{lstlisting}[style=lispinline]
-(if foo (= x 1) (= x 2))
-\end{lstlisting}
-
-  or
-
-\begin{lstlisting}[style=lispinline]
-(= x (if foo 1 2))
-\end{lstlisting}
-
-\item[A symbol type] Symbols differ from strings in that you can test equality
-  by comparing a pointer.
-\item[A notation for code] using trees of symbols.
-\item[The whole language always available] There is no real distinction between
-  read-time, compile-time, and runtime. You can compile or run code while
-  reading, read or run code while compiling, and read or compile code at
-  runtime.
-
-  Running code at read-time lets users reprogram Lisp's syntax; running code at
-  compile-time is the basis of macros; compiling at runtime is the basis of
-  Lisp's use as an extension language in programs like Emacs; and reading at
-  runtime enables programs to communicate using s-expressions, an idea recently
-  reinvented as XML.
-\end{description}
-
-Given only the original paper, it is unclear whether or not functions had a
-separate data type, as Graham implies.  The paper seems to suggest that a
-function is simply a list which happens to be called or evaluated.  This is
-still possible in at least some Lisps, \el{} among them.  \footnote{Note that
-  this does not mean that a function is necessarily merely a list of a
-  particular form, or that any guarantees on the form are given.}  The point
-Graham makes stays though: it was possible to create functions at runtime and
-pass them around as any other value.
-\end{comment}
-
 Lisp was originally supposed to adopt a different syntax, especially for
 function calls and definitions.  McCarthy even used this syntax, called
 M-expressions, in his original paper \cite{rec-fun-sym-expr}.  They were to be
@@ -3428,14 +3353,16 @@ would have been quoted instead.  In such a case \texttt{\{:foo bar}\} would
 always result in a table where the key \sym{:foo} was mapped to the symbol
 \sym{bar}, regardless of whether \sym{bar} was bound---and if so to what.
 
+\pagebreak
+
 \section{Reference}
 \label{sec:api-reference}
 
-\section{Functions}
+\subsection{Functions}
 \label{subsec:functions}
 
-\subsection{set-macro-character}
-\label{subsec:set-macro-character}
+\subsubsection{set-macro-character}
+\label{subsubsec:set-macro-character}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/set-macro-character
@@ -3464,8 +3391,8 @@ a macro character without having it’s function ever be called in a correct
 program.  This is the case when using delimited lists, as was seen in the
 example in section~\ref{sec:example}.
 
-\subsection{get-macro-character}
-\label{subsec:get-macro-character}
+\subsubsection{get-macro-character}
+\label{subsubsec:get-macro-character}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/get-macro-character
@@ -3482,8 +3409,8 @@ question and a flag denoting whether the character in question is a terminating
   any), and the second value being a flag denoting whether the character is a
   terminating or non-terminating macro character.}
 
-\subsection{make-dispatch-macro-character}
-\label{subsec:make-dispatch-macro-character}
+\subsubsection{make-dispatch-macro-character}
+\label{subsubsec:make-dispatch-macro-character}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/make-dispatch-macro-character
@@ -3499,8 +3426,8 @@ function supplied by the user.  While the only dispatching macro character in
 character, the two concepts are completely unrelated.  In fact, in \elr{},
 \texttt{\#} is a terminating character, as it is in standard \el{}.
 
-\subsection{set-dispatch-macro-character}
-\label{subsec:set-dispatch-macro-character}
+\subsubsection{set-dispatch-macro-character}
+\label{subsubsec:set-dispatch-macro-character}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/set-dispatch-macro-character
@@ -3513,8 +3440,8 @@ two, namely a dispatching and a sub character), a function, and optionally a
 readtable.  Associates the given character sequence with the given function.
 Always returns \tee{}.
 
-\subsection{get-dispatch-macro-character}
-\label{subsec:get-dispatch-macro-character}
+\subsubsection{get-dispatch-macro-character}
+\label{subsubsec:get-dispatch-macro-character}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/get-dispatch-macro-character
@@ -3528,8 +3455,8 @@ however, it only returns one value, as dispatched macro characters cannot be
 non-terminating.  However, the \texttt{dispatching} (i.e. first) character can
 (and in \cl{} also is).
 
-\subsection{copy-readtable}
-\label{subsec:copy-readtable}
+\subsubsection{copy-readtable}
+\label{subsubsec:copy-readtable}
 
 \begin{lstlisting}[style=lispinline]
 (defun el-reader/copy-readtable
@@ -3541,8 +3468,8 @@ given (or is \nil{}), the current readtable is used.  If no destination is given
 (or is \nil{}), a new table is allocated.  In either case, the table where data
 was copied into is returned.
 
-\subsection{getch}
-\label{subsec:getch}
+\subsubsection{getch}
+\label{subsubsec:getch}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defgeneric el-reader/getch (stream &optional char))
@@ -3557,8 +3484,8 @@ This character is put back onto the stream.  Methods may or may not allow
 putting back more than one character, or putting back characters which were not
 read from the stream, yet a read macro may never assume this is valid!
 
-\subsection{peek-char}
-\label{subsec:peek-char}
+\subsubsection{peek-char}
+\label{subsubsec:peek-char}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defgeneric el-reader/peek-char (stream))
@@ -3572,8 +3499,8 @@ again.  For most types this is not a problem, yet for streams which---for
 whatever reason---cannot unread more than one character, it may be necessary to
 define a method specializing on the stream type at hand.
 
-\subsection{read}
-\label{subsec:read}
+\subsubsection{read}
+\label{subsubsec:read}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/read (&optional input-stream
@@ -3624,8 +3551,8 @@ are discussed here.
   to \cl{}---does not support returning multiple values.
 \end{description}
 
-\subsection{read-preserving-whitespace}
-\label{subsec:read-preserving-whitespace}
+\subsubsection{read-preserving-whitespace}
+\label{subsubsec:read-preserving-whitespace}
 
 \begin{lstlisting}[style=lispinline]
 (cl-defun el-reader/read-preserving-whitespace
@@ -3641,27 +3568,27 @@ character, yet does not put it back.  This function does this.
 % \sym{*preserve-whitespace*} (see section ~\ref{subsec:preserve-whitespace}) to
 % \tee{} before calling \Read{}.
 Creating a new binding of the variable \sym{*preserve-whitespace*} (see
-section~\ref{subsec:preserve-whitespace}) to \tee{} before calling \Read{} is
+section~\ref{subsubsec:preserve-whitespace}) to \tee{} before calling \Read{} is
 sufficient to implement this function.  It only does so if not called as a
 recursive call.  This brings us to the next section: variables.
 
-\section{Variables}
-\label{sec:variables}
+\subsection{Variables}
+\label{subsec:variables}
 
 Besides functions, there are also variables which influence the behavior of
 several functions.  It is important to note that all of these variables may be
 rebound at the stack level, hence a caller may influence not only the direct
 callee, but all further callees.
 
-\subsection{*readtable*}
-\label{subsec:readtable-var}
+\subsubsection{*readtable*}
+\label{subsubsec:readtable-var}
 
 This variable holds the \texttt{current} readtable.  Some functions allow the
 caller to pass in a readtable as an argument, some don’t.  In either case, the
 default is this variable.
 
-\subsection{*read-base*}
-\label{subsec:read-base}
+\subsubsection{*read-base*}
+\label{subsubsec:read-base}
 
 When no extra construct is used, integers are read in base 10.  This is because
 the default value for \sym{*read-base*} is 10, and the reader always uses this
@@ -3677,8 +3604,8 @@ in three different ways:
 
 All of the above expressions return the number \(15_{10}\).
 
-\subsection{preserve-whitespace}
-\label{subsec:preserve-whitespace}
+\subsubsection{preserve-whitespace}
+\label{subsubsec:preserve-whitespace}
 
 This variable controls whether \Read{} leaves whitespace at the end of an
 expression intact or not.  The default is \nil{}.

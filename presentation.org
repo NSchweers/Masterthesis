@@ -1,0 +1,33 @@
+* Introduction
+** Lisp History
+   - 1960: McCarthy devised a representation of functions based on lambda
+     calculus.
+   - Programs as lists with symbols.
+   - prefix notation.
+   - Syntax on top was planned, never implemented.
+   - McCarthy’s student S.R. Russell handcoded ‘eval’ in machine language, hence
+     an interpreter was born.   
+** Emacs History
+   
+** Lisp Types
+** Lisp “Syntax”
+** What makes Lisp special?
+*** Macros
+*** Communicate via sexps
+*** Editing Tools
+*** Customizable Syntax
+* The Reader
+** Reader vs Parser
+** Printing and Reading
+** Replacing the built in Reader
+** Reader Algorithm
+** Data Structures
+* API Overview
+** Activation
+** Example
+** Differences
+* Future work
+** What is missing?
+** What can be improved?
+*** Rewrite in C
+*** Write a C module
