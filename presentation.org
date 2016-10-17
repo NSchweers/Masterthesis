@@ -1,26 +1,240 @@
+# -*- fill-column: 60; -*-
 * Introduction
-** Lisp History
-   - 1960: McCarthy devised a representation of functions based on lambda
-     calculus.
-   - Programs as lists with symbols.
-   - prefix notation.
-   - Syntax on top was planned, never implemented.
-   - McCarthy’s student S.R. Russell handcoded ‘eval’ in machine language, hence
-     an interpreter was born.   
 ** Emacs History
-   
+- Originated at MIT.
+- Used the interpreter from TECO.
+- TECO must have been a horrible command language.
+- Later implementations on Lisp Machines (i.e. using Lisp
+  as extension commands.
+- Rewritten in C and Emacs Lisp for the GNU project (GNU
+  Emacs).
+- Low-level code written in C, often exposed to Lisp.
+- Higher level functionality written in Lisp.
+- Thus, Emacs is not /just/ an editor, it is a Lisp VM.
+- Started out with dynamic scope, lexical scope (and
+  closures) added in version 24.1.
+- CLOS-style multimethods in 25.1.
+** Lisp History
+- 1960: McCarthy devised a representation of functions
+  based on lambda calculus.
+- Programs as lists with symbols.
+- Prefix notation.
+- Syntax on top was planned, never implemented.
+- McCarthy’s student S.R. Russell handcoded ‘eval’ in
+  machine language, hence an interpreter was born.
 ** Lisp Types
+- Many types exist.
+- Two are of supreme importance.
+*** Datatypes
+**** Symbol
+- Represent names.
+- Needed in all interpreters/compilers.
+- Exposed to the user of Lisp (because … why not?).
+- They have syntax!
+- They have the following attributes:
+  + Name :: A string representing the symbol’s name.
+  + Value :: The value which this symbol represents.  May be
+             unbound.  Symbols normally evaluate to this.
+  + Function :: Symbols which appear in the first place of a
+                list being evaluated evaluate to this cell.
+                May be unbound.
+  + Property List :: Every symbol has a (possibly empty)
+                     property list.  This can be used as a
+                     metadata map for a symbol.
+**** List
+- Made up of cons cells (ordered pairs).
+- May be heterogeneous.
+- Have syntax too.
 ** Lisp “Syntax”
+- Syntax is for data, not language constructs.
+- Reader consumes characters, produces Lisp objects.
+- Lisp objects are what are interpreted or compiled.
+*** Examples
+#+BEGIN_SRC emacs-lisp
+  (dolist (i (number-sequence 0 10))
+    (insert (format "\n%s" i)))
+#+END_SRC
+
+- Symbols:
+  + =dolist=
+  + =i=
+  + =number-sequence=
+  + =insert=
+  + =format=
+- Lists:
+  + =(dolist ...)=
+  + =(i ...)=
+  + =(number-sequence 0 10)=
+  + =(insert ...)=
+  + =(format "\n%s" i)=
+
+- Lists which are evaluated are treated as “operations”.
+- The first element is the operation.
+- Not all lists are evaluated!
 ** What makes Lisp special?
 *** Macros
+- Many dynamic languages (perl, python, ruby) can create
+  code at runtime and run it.
+- Most cannot /parse/ code at runtime.
+- This makes code manipulation/rewriting very difficult.
+- In Lisp, code is represented by Lisp datastructures, thus
+  can be walked.
+- This makes macros possible and powerful.
+- Macros recieve their arguments /unevalled/, i.e. as code,
+  not as the result of running the code.
+**** Example
+#+BEGIN_SRC emacs-lisp
+  (dolist (i (number-sequence 0 10))
+    ...)
+#+END_SRC
+
+- The list =(i (number-sequence 0 10))= is /not/ evaluated.
+- The macro =dolist= evaluates the second list element /once/.
+- The second argument (...) is repeatedly evaluated.
+- An element from the sequence is bound to the symbol =i=
+  for each invokation.
 *** Communicate via sexps
+- As Lisp syntax is for data, it can be used as such.
+- Can be read and printed.
 *** Editing Tools
+- Source code in any language must be well-formed.
+- Editing tools should try to enforce this.
+- Should allow editing of structure, not of characters.
+- Lispy and Paredit do so.
+- Example:
+#+BEGIN_SRC emacs-lisp
+  (defun el-reader//read-hash-table (stream _char)
+     (cl-values
+      (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
+        (if (= (mod (length k-v) 2) 1)
+            (error "Invalid syntax: {}")
+          `(el-reader//ht ,@k-v)))))
+#+END_SRC
 *** Customizable Syntax
+- What this is all about!
+- Lisp enables extensible readers.
+- These can define new syntax for objects.
+- Example: 
+#+BEGIN_SRC emacs-lisp
+  (defun el-reader//read-hash-table (stream _char)
+     (cl-values
+      (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
+        (if (= (mod (length k-v) 2) 1)
+            (error "Invalid syntax: {}")
+          `(el-reader//ht ,@k-v)))))
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  {:foo "foo" :bar 5}
+#+END_SRC
+
+- With el-reader activated (plus the optional extension)
+  this evaluates to a hashtable with two keys and two
+  values.
 * The Reader
 ** Reader vs Parser
+- Why not use the word “parser”?
+- Parsers presume a lexer.
+- Lisp does both at the same time, /but/ exposes the reader
+  to the user of the language.
+- In theory a user can also manipulate where the lexer
+  separates tokens (not recommended)
 ** Printing and Reading
+- Printing is almost the inverse to reading.
+- Printing converts objects to a sequence of characters.
+- The result /may/ be readable (by the reader).
+- Print example:
+#+BEGIN_SRC emacs-lisp
+  (princ '("foo" "bar"))
+  (princ "foo")
+  (princ (current-buffer))
+#+END_SRC
+- Read example:
+#+BEGIN_SRC emacs-lisp
+  (read "1")
+  (read "foo")
+  (read "\"foo\"")
+  (read "#<buffer *Org Src presentation.org[ emacs-lisp ]*>")
+#+END_SRC
 ** Replacing the built in Reader
-** Reader Algorithm
+- Need to replace the built-in function =read= altogether.
+- Yet still want to keep it around.
+- Advice to the rescue!
+#+BEGIN_SRC emacs-lisp
+  (define-advice read (:around (oldfun &optional stream) el-reader//replace-read)
+    (if use-el-reader
+        (el-reader/read stream)
+      (funcall oldfun stream)))
+#+END_SRC
+*** Compatibility
+- Elisp’s read:
+#+BEGIN_SRC emacs-lisp
+  (read &optional STREAM)
+#+END_SRC
+- CL’s read:
+#+BEGIN_SRC common-lisp
+  (read &optional INPUT-STREAM EOF-ERROR-P EOF-VALUE RECURSIVE-P)
+#+END_SRC
+- el-reader’s read:
+#+BEGIN_SRC emacs-lisp
+  (cl-defun el-reader/read (&optional input-stream
+                                      (eof-error-p t)
+                                      eof-value
+                                      recursive-p
+                                      keys))
+#+END_SRC
+** How does the Reader work?
+*** Terminology
+**** General Terms
+- Terminating macro character :: Calls user-supplied
+     function if first char in token, ends read otherwise.
+- Non-terminating macro character :: Calls user-supplied
+     function if first char in token, reads itself otherwise.
+- Read macro :: A pair of a macro character and a function
+                to be called when this character is encountered.
+- Syntax type :: Every instance of every character has
+                 exactly one syntax type.  Terminating and
+                 non-terminating macro characters are syntax
+                 types.
+- Token :: An atomic unit of text.  Reads as a symbol or
+           number.
+**** Character Syntax Types
+- Constituent :: Part of a token (symbol or number).
+- Macro character :: Can be terminating or non-terminating.
+- Single escape character :: Causes the next character to be
+     treated as a constituent (even if it was a macro
+     character).
+     #+BEGIN_SRC emacs-lisp
+       'foo\(bar
+       ;; => A symbol with the name "foo(bar"
+     #+END_SRC
+- Multiple escape character :: Also escapes characters to be
+     constituent, but does so for a stretch of characters
+     until another multiple escape character is encountered.
+- Whitespace :: Characters which end the accumulation of a
+                token, but are otherwise skipped.
+- Invalid :: Characters which may not occur (unused by
+             el-reader).
+**** Character Traits
+- alphabetic
+- digit
+- plus sign
+- minus sign
+- dot
+- decimal point
+- ratio marker
+- exponent marker
+- invalid (unused)
+*** Reader Algorithm (WARNING: very technical!)
+[[~/code/el-reader/el-reader.el::1399][Link to the code]].
+*** Additional algorithms
+**** =read-delimited-list=
+[[~/code/el-reader/el-reader.el::1209][Link to the code]].
+*** Reading lists and dotted pair notation.
+[[~/code/el-reader/el-reader.el::1601][Link to the code]].
+[[~/code/el-reader/el-reader.el::1601][Link to the code in =read=]].
+*** Interpreting Numbers.
+[[~/code/el-reader/el-reader.el::1186][Link to the code]].
 ** Data Structures
 * API Overview
 ** Activation
