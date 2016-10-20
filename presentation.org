@@ -1,7 +1,10 @@
 # -*- fill-column: 60; -*-
+#+LATEX_CLASS: scrartcl
+#+LATEX_CLASS_OPTIONS: [a4paper]
+#+SEQ_TODO: OPTIONAL
 #+TITLE: Proof of Concept: An implementation of a reader for extensible syntaxes for Emacs Lisp.
-* Introduction
-** Emacs History
+* Lisp Introduction
+** OPTIONAL Emacs History
 - Originated at MIT.
 - Used the interpreter from TECO.
 - TECO must have been a horrible command language.
@@ -12,7 +15,7 @@
 - Low-level code written in C, often exposed to Lisp.
 - Higher level functionality written in Lisp.
 - Thus, Emacs is not /just/ an editor, it is a Lisp VM.
-** Lisp History
+** OPTIONAL Lisp History
 - 1960: McCarthy devised a representation of functions
   based on lambda calculus.
 - Programs as lists with symbols.
@@ -29,7 +32,7 @@
     - When evaluated, represents an operation.
   + Symbol
     - Needed in a compiler anyway
-    - Exposed to the user
+    - Exposed to the user (because … why not?)
     - They have syntax too!
     - When evaluated, returns the appropriate slot.
 ** What makes Lisp special?
@@ -61,41 +64,24 @@
 - Should allow editing of structure, not of characters.
 - Lispy and Paredit do so.
 **** Example
-Task: Pull `let' outside of `cl-values'
+Task: Place `cl-values' around the call to `apply'.
 #+BEGIN_SRC emacs-lisp
   (defun el-reader//read-hash-table (stream _char)
     (cl-values
      (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
        (if (= (mod (length k-v) 2) 1)
            (error "Invalid syntax: {}")
-         `(el-reader//ht ,@k-v)))))
+         (apply #'el-reader//ht k-v)))))
 #+END_SRC
 *** Customizable Syntax
 - What this is all about!
 - Lisp enables extensible readers.
-- Syntax is for data, not language constructs.
+- Syntax is for data, not language constructs:
+  - () :: Lists
+  - [] :: Vectors
+  - "" :: Strings
 - Reader consumes characters, produces Lisp objects.
 - The compiler consumes Lisp objects, returns (byte-)code.
-- Programs can define new syntax for objects.
-**** Example
-#+BEGIN_SRC emacs-lisp
-  (eval-and-compile (setf use-el-reader t))
-
-  (defun el-reader//read-hash-table (stream _char)
-    (cl-values
-     (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
-       (if (= (mod (length k-v) 2) 1)
-           (error "Invalid syntax: {}")
-         `(el-reader//ht ,@k-v)))))
-
-  (el-reader/set-macro-character ?{ #'el-reader//read-hash-table)
-
-  (cl-multiple-value-bind (fun _term)
-      (el-reader/get-macro-character ?\))
-    (el-reader/set-macro-character ?\} fun))
-
-  {:foo "foo" :bar 5}
-#+END_SRC
 * The Reader
 ** Reader vs Parser
 - Why not use the word “parser”?
@@ -103,7 +89,7 @@ Task: Pull `let' outside of `cl-values'
 - Lisp does both at the same time, /but/ exposes the reader
   to the user of the language.
 - A user can also manipulate where the lexer separates
-  tokens---we saw this in the hashtable example.
+  tokens---we’ll see an example of that [[#read-macro-example][later]] with hashtables.
 ** Replacing the built in Reader
 - Need to replace the built-in function =read= altogether.
 - Yet still want to keep it around.
@@ -135,7 +121,8 @@ Task: Pull `let' outside of `cl-values'
 #+END_SRC
 ** How does the Reader work?
 *** Readers Digest Version
-- If the first character of a token is a macro character,
+- =read= reads one expression from the stream.
+- If the first character encountered is a macro character,
   execute that function and use the result.
 - If not, read characters into a token (symbol or number)
   + End the token when whitespace /or a macro character/ is
@@ -143,7 +130,7 @@ Task: Pull `let' outside of `cl-values'
 - Escape characters may be used to prevent macro execution
   or token termination (may include whitespace in a symbol
   name).
-*** Terminology
+*** OPTIONAL Terminology
 **** General Terms
 - Terminating macro character :: Calls user-supplied
      function if first char in token, ends read otherwise.
@@ -184,17 +171,17 @@ Task: Pull `let' outside of `cl-values'
 - ratio marker
 - exponent marker
 - invalid (unused)
-*** Reader Algorithm (WARNING: very technical!)
+*** OPTIONAL Reader Algorithm (WARNING: very technical!)
 [[~/code/el-reader/el-reader.el::1399][Link to the code]].
-*** Additional algorithms
+*** OPTIONAL Additional algorithms
 **** =read-delimited-list=
 [[~/code/el-reader/el-reader.el::1209][Link to the code]].
-*** Reading lists and dotted pair notation.
+**** Reading lists and dotted pair notation.
 [[~/code/el-reader/el-reader.el::1601][Link to the code]].
 [[~/code/el-reader/el-reader.el::1601][Link to the code in =read=]].
-*** Interpreting Numbers.
+**** Interpreting Numbers.
 [[~/code/el-reader/el-reader.el::1186][Link to the code]].
-** Data Structures
+** OPTIONAL Data Structures
 #+BEGIN_SRC emacs-lisp
   (with-current-buffer (get-buffer "el-reader.el")
     (occur "(\\(?:defclass\\|cl-defgeneric\\)"))
@@ -211,6 +198,9 @@ Task: Pull `let' outside of `cl-values'
   the current buffer (i.e. file).
 - The advice around =read= honors this variable.
 ** Example
+   :PROPERTIES:
+   :CUSTOM_ID: read-macro-example
+   :END:
 #+BEGIN_SRC emacs-lisp
   (defun el-reader//ht (&rest args)
     "Create and return a hashtable.
@@ -227,26 +217,28 @@ Task: Pull `let' outside of `cl-values'
      (let ((k-v (el-reader/read-delimited-list ?\} stream t)))
        (if (= (mod (length k-v) 2) 1)
            (error "Invalid syntax: {}")
-         `(el-reader//ht ,@k-v)))))
+         (apply #'el-reader//ht k-v)))))
 
   (el-reader/set-macro-character ?\{ #'el-reader//read-hash-table)
 
   (cl-multiple-value-bind (fun _term)
       (el-reader/get-macro-character ?\))
     (el-reader/set-macro-character ?\} fun))
+
+  {:foo "foo" :bar 5}
 #+END_SRC
 ** Functions
-- =set-macro-character= :: [[~/code/el-reader/el-reader.el::360][Link]]
-- =get-macro-character= :: [[~/code/el-reader/el-reader.el::348][Link]]
-- =make-dispatch-macro-character= :: [[~/code/el-reader/el-reader.el::1267][Link]]
-- =set-dispatch-macro-character= :: [[~/code/el-reader/el-reader.el::1295][Link]]
-- =get-dispatch-macro-character= :: [[~/code/el-reader/el-reader.el::1287][Link]]
-- =copy-readtable= :: [[~/code/el-reader/el-reader.el::187][Link]]
-- =getch= :: [[~/code/el-reader/el-reader.el::258][Link]]
-- =peek-char= :: [[~/code/el-reader/el-reader.el::263][Link]]
-- =read= :: [[~/code/el-reader/el-reader.el::1399][Link]]
-- =read-preserving-whitespace= :: [[~/code/el-reader/el-reader.el::1475][Link]]
-** Variables
++ =set-macro-character= :: [[~/code/el-reader/el-reader.el::360][Link]]
++ =get-macro-character= :: [[~/code/el-reader/el-reader.el::348][Link]]
++ =make-dispatch-macro-character= :: [[~/code/el-reader/el-reader.el::1267][Link]]
++ =set-dispatch-macro-character= :: [[~/code/el-reader/el-reader.el::1295][Link]]
++ =get-dispatch-macro-character= :: [[~/code/el-reader/el-reader.el::1287][Link]]
++ =copy-readtable= :: [[~/code/el-reader/el-reader.el::187][Link]]
++ =getch= :: [[~/code/el-reader/el-reader.el::258][Link]]
++ =peek-char= :: [[~/code/el-reader/el-reader.el::263][Link]]
++ =read= :: [[~/code/el-reader/el-reader.el::1399][Link]]
++ =read-preserving-whitespace= :: [[~/code/el-reader/el-reader.el::1475][Link]]
+** OPTIONAL Variables
 - =*readtable*= :: [[~/code/el-reader/el-reader.el::204][Link]]
 - =*read-base*= :: [[~/code/el-reader/el-reader.el::208][Link]]
 - =*preserve-whitespace*= :: [[~/code/el-reader/el-reader.el::210][Link]]
